@@ -1,0 +1,107 @@
+---
+import Base from '../../layouts/Base.astro';
+import ProgressPoller from '../../components/ProgressPoller.astro';
+import ResultCard from '../../components/ResultCard.astro';
+
+const { query_id } = Astro.params;
+const jobId = Astro.url.searchParams.get('job');
+const minScore = Number(Astro.url.searchParams.get('min_score') ?? '1');
+
+const apiBase = import.meta.env.BACKEND_URL ?? 'http://localhost:8000';
+
+let query: any = null;
+let results: any[] = [];
+let totalResults = 0;
+let jobDone = false;
+let error = '';
+
+// Check if job is still running
+if (jobId) {
+  try {
+    const jobRes = await fetch(`${apiBase}/api/query/status/${jobId}`);
+    if (jobRes.ok) {
+      const job = await jobRes.json();
+      jobDone = job.status === 'done' || job.status === 'failed';
+    }
+  } catch {}
+} else {
+  jobDone = true;
+}
+
+// Fetch results
+try {
+  const res = await fetch(`${apiBase}/api/query/${query_id}/results?min_score=${minScore}&limit=100`);
+  if (!res.ok) { error = 'Query not found'; }
+  else {
+    const data = await res.json();
+    query = { intent: data.intent, model: data.model, created_at: data.created_at };
+    results = data.results;
+    totalResults = data.total_results;
+  }
+} catch (e: any) {
+  error = e.message;
+}
+---
+<Base title={query?.intent ?? 'Query'}>
+  {error ? (
+    <div class="text-red-400">{error}</div>
+  ) : (
+    <div class="space-y-6">
+      <div>
+        <h1 class="text-xl font-bold text-white leading-snug">"{query?.intent}"</h1>
+        <p class="text-xs text-gray-500 mt-1">{query?.model} · {query?.created_at?.slice(0,10)} · {totalResults} results (score ≥ {minScore})</p>
+      </div>
+
+      {!jobDone && jobId && (
+        <div class="bg-gray-900 rounded-xl p-5 space-y-3">
+          <p class="text-sm text-gray-400 font-medium">Evaluating transcript chunks…</p>
+          <ProgressPoller
+            jobId={jobId}
+            type="query"
+            redirectUrl={`/query/${query_id}?min_score=${minScore}`}
+          />
+        </div>
+      )}
+
+      {jobDone && results.length === 0 && (
+        <p class="text-gray-400 text-sm">No results found with score ≥ {minScore}. Try lowering the minimum score.</p>
+      )}
+
+      {results.length > 0 && (
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Results</h2>
+            <a
+              id="report-link"
+              href="#"
+              target="_blank"
+              class="text-xs text-indigo-400 hover:text-indigo-300 transition-colors"
+            >
+              Export Markdown ↗
+            </a>
+            <script define:vars={{ query_id, minScore }}>
+              const link = document.getElementById('report-link');
+              const base = import.meta.env.PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
+              link.href = `${base}/api/query/${query_id}/report?min_score=${minScore}`;
+            </script>
+          </div>
+
+          <div class="space-y-3">
+            {results.map((r: any) => (
+              <ResultCard
+                score={r.score}
+                reasoning={r.reasoning}
+                chunk_text={r.chunk_text}
+                start_sec={r.start_sec}
+                end_sec={r.end_sec}
+                youtube_id={r.youtube_id}
+                video_title={r.video_title}
+                youtube_url={r.youtube_url}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )}
+</Base>

@@ -1,0 +1,51 @@
+---
+interface Props {
+  score: number;
+  reasoning: string;
+  chunk_text: string;
+  start_sec: number;
+  end_sec: number;
+  youtube_id: string;
+  video_title: string;
+  youtube_url: string;
+}
+const { score, reasoning, chunk_text, start_sec, end_sec, video_title, youtube_url } = Astro.props;
+
+function fmtTime(s: number) {
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = Math.floor(s % 60);
+  if (h) return `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+  return `${m}:${String(sec).padStart(2,'0')}`;
+}
+
+const badgeClass = score >= 8
+  ? 'bg-green-900 text-green-300'
+  : score >= 5
+  ? 'bg-yellow-900 text-yellow-300'
+  : 'bg-red-900 text-red-300';
+
+const preview = chunk_text.length > 280 ? chunk_text.slice(0, 280) + '…' : chunk_text;
+---
+<div class="bg-gray-900 rounded-xl p-5 space-y-3 border border-gray-800 hover:border-gray-700 transition-colors">
+  <div class="flex items-start justify-between gap-3">
+    <div class="space-y-1 flex-1 min-w-0">
+      <p class="text-xs text-gray-400 truncate">{video_title}</p>
+      <p class="text-sm text-gray-300">{reasoning}</p>
+    </div>
+    <span class={`shrink-0 px-2.5 py-1 rounded-full text-sm font-bold ${badgeClass}`}>
+      {score}/10
+    </span>
+  </div>
+
+  <p class="text-xs text-gray-500 leading-relaxed">{preview}</p>
+
+  <a
+    href={youtube_url}
+    target="_blank"
+    rel="noopener noreferrer"
+    class="inline-flex items-center gap-2 text-xs text-indigo-400 hover:text-indigo-300 transition-colors font-medium"
+  >
+    ▶ Watch at {fmtTime(start_sec)} → {fmtTime(end_sec)}
+  </a>
+</div>

@@ -1,0 +1,88 @@
+---
+interface Props {
+  jobId: string;
+  type: 'scrape' | 'query';
+  redirectUrl?: string;
+}
+const { jobId, type, redirectUrl } = Astro.props;
+const apiBase = import.meta.env.PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
+---
+<div id="poller" class="space-y-4">
+  <div class="flex items-center justify-between text-sm">
+    <span id="status-text" class="text-gray-400">Starting…</span>
+    <span id="progress-text" class="text-gray-500"></span>
+  </div>
+  <div class="w-full bg-gray-800 rounded-full h-2">
+    <div id="progress-bar" class="bg-indigo-500 h-2 rounded-full transition-all duration-300" style="width:0%"></div>
+  </div>
+  <div id="error-list" class="space-y-1 hidden"></div>
+  <div id="done-msg" class="hidden text-green-400 text-sm font-medium">
+    ✓ Done!
+    {redirectUrl && <a id="done-link" href={redirectUrl} class="ml-2 text-indigo-400 hover:text-indigo-300 underline">Continue →</a>}
+  </div>
+</div>
+
+<script define:vars={{ jobId, type, redirectUrl, apiBase }}>
+  const statusText = document.getElementById('status-text');
+  const progressText = document.getElementById('progress-text');
+  const bar = document.getElementById('progress-bar');
+  const doneMsg = document.getElementById('done-msg');
+  const errorList = document.getElementById('error-list');
+
+  const endpoint = type === 'scrape'
+    ? `${apiBase}/api/scrape/status/${jobId}`
+    : `${apiBase}/api/query/status/${jobId}`;
+
+  async function poll() {
+    try {
+      const res = await fetch(endpoint);
+      const data = await res.json();
+
+      const pct = data.total > 0 ? Math.round((data.completed / data.total) * 100) : 0;
+      bar.style.width = `${pct}%`;
+      progressText.textContent = data.total > 0 ? `${data.completed} / ${data.total}` : '';
+
+      if (data.status === 'running' || data.status === 'queued') {
+        statusText.textContent = data.status === 'queued' ? 'Queued…' : 'Running…';
+        setTimeout(poll, 1500);
+      } else if (data.status === 'done') {
+        bar.style.width = '100%';
+        bar.classList.replace('bg-indigo-500', 'bg-green-500');
+        statusText.textContent = 'Complete';
+        doneMsg.classList.remove('hidden');
+
+        if (data.error_json) {
+          try {
+            const errs = JSON.parse(data.error_json);
+            if (Array.isArray(errs) && errs.length > 0) {
+              errorList.classList.remove('hidden');
+              errs.forEach(e => {
+                const p = document.createElement('p');
+                p.className = 'text-xs text-yellow-400';
+                p.textContent = `⚠ ${e.error} (video ${e.video_id ?? ''})`;
+                errorList.appendChild(p);
+              });
+            }
+          } catch {}
+        }
+
+        if (redirectUrl) {
+          setTimeout(() => { window.location.href = redirectUrl; }, 1200);
+        }
+      } else if (data.status === 'failed') {
+        bar.classList.replace('bg-indigo-500', 'bg-red-500');
+        statusText.textContent = 'Failed';
+        errorList.classList.remove('hidden');
+        const p = document.createElement('p');
+        p.className = 'text-xs text-red-400';
+        p.textContent = data.error_json ?? 'Unknown error';
+        errorList.appendChild(p);
+      }
+    } catch (e) {
+      statusText.textContent = 'Connection error, retrying…';
+      setTimeout(poll, 3000);
+    }
+  }
+
+  poll();
+</script>

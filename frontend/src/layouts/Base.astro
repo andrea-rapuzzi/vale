@@ -1,0 +1,28 @@
+---
+import '../styles/global.css';
+interface Props { title?: string }
+const { title = 'YTS' } = Astro.props;
+---
+<!doctype html>
+<html lang="en" class="bg-gray-950 text-gray-100 min-h-screen">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>{title} — YTS</title>
+  </head>
+  <body class="min-h-screen flex flex-col">
+    <header class="border-b border-gray-800 px-6 py-4 flex items-center gap-6">
+      <a href="/" class="text-lg font-bold tracking-tight text-white hover:text-indigo-400 transition-colors">
+        YTS
+      </a>
+      <nav class="flex gap-4 text-sm text-gray-400">
+        <a href="/" class="hover:text-white transition-colors">Home</a>
+        <a href="/query" class="hover:text-white transition-colors">New Query</a>
+        <a href="/queries" class="hover:text-white transition-colors">Query History</a>
+      </nav>
+    </header>
+    <main class="flex-1 px-6 py-8 max-w-5xl mx-auto w-full">
+      <slot />
+    </main>
+  </body>
+</html>

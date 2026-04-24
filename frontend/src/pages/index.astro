@@ -1,0 +1,44 @@
+---
+import Base from '../layouts/Base.astro';
+import ChannelForm from '../components/ChannelForm.astro';
+
+const apiBase = import.meta.env.BACKEND_URL ?? 'http://localhost:8000';
+let recentQueries: any[] = [];
+try {
+  const res = await fetch(`${apiBase}/api/queries?limit=5`);
+  if (res.ok) {
+    const data = await res.json();
+    recentQueries = data.queries ?? [];
+  }
+} catch {}
+---
+<Base title="Home">
+  <div class="max-w-2xl mx-auto space-y-10">
+    <div class="text-center space-y-2 pt-6">
+      <h1 class="text-3xl font-bold text-white">YouTube Transcript Search</h1>
+      <p class="text-gray-400">Find the exact moments in any YouTube channel that match your search intent.</p>
+    </div>
+
+    <ChannelForm />
+
+    {recentQueries.length > 0 && (
+      <div>
+        <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">Recent Queries</h2>
+        <ul class="space-y-2">
+          {recentQueries.map((q: any) => (
+            <li>
+              <a
+                href={`/query/${q.id}`}
+                class="flex items-center justify-between px-4 py-3 rounded-lg bg-gray-900 hover:bg-gray-800 transition-colors group"
+              >
+                <span class="text-sm text-gray-200 group-hover:text-white truncate max-w-xs">{q.intent}</span>
+                <span class="text-xs text-gray-500 ml-4 shrink-0">{q.result_count} results · {q.created_at.slice(0,10)}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+        <a href="/queries" class="text-xs text-indigo-400 hover:text-indigo-300 mt-2 inline-block">View all queries →</a>
+      </div>
+    )}
+  </div>
+</Base>
