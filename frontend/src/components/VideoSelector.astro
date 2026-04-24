@@ -1,0 +1,119 @@
+---
+interface Props {
+  videos: any[];
+  channelId: string | undefined;
+}
+const { videos, channelId } = Astro.props;
+const apiBase = import.meta.env.PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
+---
+<div class="space-y-4">
+  <div class="flex items-center justify-between">
+    <p class="text-sm text-gray-400">Select up to <strong class="text-white">10 videos</strong> to scrape transcripts.</p>
+    <span id="sel-count" class="text-sm font-medium text-indigo-400">0 selected</span>
+  </div>
+
+  <div class="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
+    {videos.map((v: any) => (
+      <label
+        data-scraped={v.scraped ? 'true' : 'false'}
+        class="flex items-start gap-3 px-4 py-3 rounded-lg bg-gray-900 hover:bg-gray-800 cursor-pointer transition-colors group"
+      >
+        <input
+          type="checkbox"
+          name="video"
+          value={v.id}
+          data-youtube-id={v.youtube_id}
+          disabled={false}
+          class="mt-0.5 accent-indigo-500 video-cb"
+        />
+        <div class="flex-1 min-w-0">
+          <p class="text-sm text-gray-200 group-hover:text-white leading-snug">{v.title}</p>
+          <p class="text-xs text-gray-500 mt-0.5">
+            {v.upload_date ? `${v.upload_date.slice(0,4)}-${v.upload_date.slice(4,6)}-${v.upload_date.slice(6,8)}` : ''}
+            {v.duration_sec ? ` · ${Math.floor(v.duration_sec/60)}m${v.duration_sec%60}s` : ''}
+            {v.scraped && <span class="ml-2 text-green-500">✓ scraped</span>}
+          </p>
+        </div>
+      </label>
+    ))}
+  </div>
+
+  <div class="flex gap-3 pt-2">
+    <button
+      id="scrape-btn"
+      disabled
+      class="px-5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+    >
+      Scrape Selected
+    </button>
+    <button
+      id="search-btn"
+      disabled
+      class="px-5 py-2.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+    >
+      Search Selected (already scraped)
+    </button>
+  </div>
+
+  <p id="sel-error" class="text-sm text-red-400 hidden"></p>
+</div>
+
+<script define:vars={{ apiBase }}>
+  const checkboxes = document.querySelectorAll('.video-cb');
+  const scrapeBtn = document.getElementById('scrape-btn');
+  const searchBtn = document.getElementById('search-btn');
+  const countEl = document.getElementById('sel-count');
+  const errEl = document.getElementById('sel-error');
+
+  function getSelected() {
+    return Array.from(checkboxes).filter(cb => cb.checked).map(cb => Number(cb.value));
+  }
+
+  function update() {
+    const sel = getSelected();
+    const count = sel.length;
+    countEl.textContent = `${count} selected`;
+    scrapeBtn.disabled = count === 0;
+    // Enable search only if at least one selected video is already scraped
+    const hasScraped = Array.from(checkboxes)
+      .filter(cb => cb.checked)
+      .some(cb => cb.closest('label').dataset.scraped === 'true');
+    searchBtn.disabled = !hasScraped;
+
+    // Enforce max 10: disable unchecked if already at limit
+    checkboxes.forEach(cb => {
+      if (!cb.checked) cb.disabled = count >= 10;
+    });
+  }
+
+  checkboxes.forEach(cb => cb.addEventListener('change', update));
+
+  scrapeBtn.addEventListener('click', async () => {
+    const ids = getSelected();
+    if (!ids.length) return;
+    errEl.classList.add('hidden');
+    scrapeBtn.disabled = true;
+    scrapeBtn.textContent = 'Starting…';
+    try {
+      const res = await fetch(`${apiBase}/api/scrape`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ video_ids: ids }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail ?? 'Error starting scrape');
+      window.location.href = `/scrape/${data.job_id}`;
+    } catch (e) {
+      errEl.textContent = e.message;
+      errEl.classList.remove('hidden');
+      scrapeBtn.disabled = false;
+      scrapeBtn.textContent = 'Scrape Selected';
+    }
+  });
+
+  searchBtn.addEventListener('click', () => {
+    const ids = getSelected();
+    const params = ids.map(id => `v=${id}`).join('&');
+    window.location.href = `/query?${params}`;
+  });
+</script>

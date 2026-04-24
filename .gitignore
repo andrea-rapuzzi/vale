@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+dist/
+.pytest_cache/
+
+# Env
+.env
+*.env.local
+
+# Data
+backend/data/
+
+# Node
+node_modules/
+frontend/node_modules/
+frontend/dist/
+frontend/.astro/
+
+# OS
+.DS_Store
+*.swp

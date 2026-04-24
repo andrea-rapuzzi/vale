@@ -1,0 +1,67 @@
+---
+---
+<div class="bg-gray-900 rounded-xl p-6 space-y-4">
+  <h2 class="text-lg font-semibold text-white">Analyze a YouTube Channel</h2>
+  <p class="text-sm text-gray-400">Enter a channel URL (e.g. <code class="text-indigo-400">https://www.youtube.com/@mkbhd</code>).</p>
+
+  <div class="flex gap-3">
+    <input
+      id="channel-url"
+      type="url"
+      placeholder="https://www.youtube.com/@..."
+      class="flex-1 px-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+    />
+    <button
+      id="fetch-btn"
+      class="px-5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+    >
+      Fetch Videos
+    </button>
+  </div>
+
+  <p id="channel-error" class="text-sm text-red-400 hidden"></p>
+  <p id="channel-status" class="text-sm text-gray-400 hidden"></p>
+</div>
+
+<script>
+  const btn = document.getElementById('fetch-btn') as HTMLButtonElement;
+  const input = document.getElementById('channel-url') as HTMLInputElement;
+  const errEl = document.getElementById('channel-error')!;
+  const statusEl = document.getElementById('channel-status')!;
+  const apiBase = import.meta.env.PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
+
+  async function poll(jobId: string): Promise<any> {
+    while (true) {
+      const r = await fetch(`${apiBase}/api/channel/fetch/status/${jobId}`);
+      const data = await r.json();
+      if (data.status === 'done') return data;
+      if (data.status === 'failed') throw new Error(data.error_json ?? 'Fetch failed');
+      await new Promise(res => setTimeout(res, 1500));
+    }
+  }
+
+  btn.addEventListener('click', async () => {
+    const url = input.value.trim();
+    if (!url) return;
+    errEl.classList.add('hidden');
+    btn.disabled = true;
+    statusEl.textContent = 'Fetching channel videos…';
+    statusEl.classList.remove('hidden');
+    try {
+      const res = await fetch(`${apiBase}/api/channel/fetch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail ?? 'Unknown error');
+      const job = await poll(data.job_id);
+      window.location.href = `/channel/${job.ref_id}`;
+    } catch (e: any) {
+      errEl.textContent = e.message;
+      errEl.classList.remove('hidden');
+      statusEl.classList.add('hidden');
+      btn.disabled = false;
+    }
+  });
+</script>

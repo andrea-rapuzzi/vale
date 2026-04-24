@@ -1,0 +1,11 @@
+{
+  "name": "yts",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"cd backend && uvicorn app.main:app --reload --port 8000\" \"cd frontend && npm run dev -- --port 4321\"",
+    "install:frontend": "cd frontend && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
