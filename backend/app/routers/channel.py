@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timezone
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from ..models.api import ChannelFetchRequest, JobStatusOut, VideoOut
@@ -15,7 +16,7 @@ def _now() -> str:
 async def _fetch_job(job_id: str, url: str) -> None:
     update_job(job_id, status="running")
     try:
-        channel_name, videos = fetch_channel_videos(url)
+        channel_name, videos = await asyncio.to_thread(fetch_channel_videos, url)
     except Exception as e:
         update_job(job_id, status="failed", error_json=str(e))
         return

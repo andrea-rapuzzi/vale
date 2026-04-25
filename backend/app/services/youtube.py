@@ -1,6 +1,8 @@
 import subprocess
 import json
 import time
+import tempfile
+import logging
 import http.cookiejar
 import requests
 from pathlib import Path
@@ -8,6 +10,9 @@ from typing import Optional
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import TranscriptsDisabled, NoTranscriptFound
 from ..config import settings
+from .vtt_parser import parse_vtt
+
+log = logging.getLogger(__name__)
 
 
 def _cookies_file() -> Optional[Path]:
@@ -125,28 +130,25 @@ def fetch_channel_videos(url: str) -> tuple[str, list[dict]]:
     return channel_name, videos
 
 
-def fetch_transcript(youtube_id: str) -> Optional[list[dict]]:
-    """Fetch transcript segments for a video via youtube-transcript-api.
+PREFERRED_LANGS = ["it", "en", "it-orig", "en-orig"]
 
-    Returns list of {start, end, text} dicts, or None if no transcript available.
-    Prefers manual subtitles, falls back to auto-generated.
-    """
+
+def _fetch_via_transcript_api(youtube_id: str) -> Optional[list[dict]]:
+    """Try youtube-transcript-api. Often IP-blocked; returns None on failure."""
     session = _make_session()
     api = YouTubeTranscriptApi(http_client=session) if session else YouTubeTranscriptApi()
-
-    preferred_langs = ["en", "it", "en-orig", "it-orig"]
 
     try:
         transcript_list = api.list(youtube_id)
     except (TranscriptsDisabled, NoTranscriptFound):
         return None
-    except Exception:
+    except Exception as e:
+        log.info("youtube-transcript-api failed for %s: %s", youtube_id, type(e).__name__)
         return None
 
-    # Try manual first, then auto-generated, in preferred language order
     transcript = None
     for generated in (False, True):
-        for lang in preferred_langs:
+        for lang in PREFERRED_LANGS:
             try:
                 candidates = [
                     t for t in transcript_list
@@ -160,7 +162,6 @@ def fetch_transcript(youtube_id: str) -> Optional[list[dict]]:
         if transcript is not None:
             break
 
-    # Last resort: any available transcript
     if transcript is None:
         try:
             for t in transcript_list:
@@ -185,3 +186,56 @@ def fetch_transcript(youtube_id: str) -> Optional[list[dict]]:
             "text": seg.text.strip(),
         })
     return cues
+
+
+def _fetch_via_ytdlp(youtube_id: str) -> Optional[list[dict]]:
+    """Download VTT via yt-dlp. Tries each preferred lang individually; the first
+    that returns a file wins. yt-dlp throws on rate-limited langs (e.g. auto-translated
+    'en' for an Italian video), so we isolate per-lang to keep going on 429.
+    """
+    url = f"https://www.youtube.com/watch?v={youtube_id}"
+    cookies_args = _yt_dlp_cookies_args()
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        for lang in PREFERRED_LANGS:
+            cmd = [
+                "yt-dlp",
+                *cookies_args,
+                "--write-auto-sub",
+                "--write-sub",
+                "--sub-lang", lang,
+                "--sub-format", "vtt",
+                "--skip-download",
+                "--ignore-no-formats-error",
+                "--no-warnings",
+                "-o", str(tmp_path / "%(id)s.%(ext)s"),
+                url,
+            ]
+            try:
+                subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+            except subprocess.TimeoutExpired:
+                continue
+
+            vtt_files = list(tmp_path.glob(f"{youtube_id}*.vtt"))
+            if vtt_files:
+                cues = parse_vtt(vtt_files[0])
+                if cues:
+                    return cues
+                for f in vtt_files:
+                    f.unlink(missing_ok=True)
+
+    return None
+
+
+def fetch_transcript(youtube_id: str) -> Optional[list[dict]]:
+    """Fetch transcript segments for a video.
+
+    Tries youtube-transcript-api first (fast when it works), then falls back to
+    yt-dlp (more robust against IP blocks). Returns list of {start, end, text}
+    dicts, or None if no transcript could be retrieved.
+    """
+    cues = _fetch_via_transcript_api(youtube_id)
+    if cues:
+        return cues
+    return _fetch_via_ytdlp(youtube_id)
