@@ -1,11 +1,9 @@
 import json
 from datetime import datetime, timezone
-from pathlib import Path
 from ..database import get_conn
 from ..jobs import update_job
-from ..config import settings
-from .youtube import download_vtt
-from .vtt_parser import parse_and_chunk
+from .youtube import fetch_transcript
+from .vtt_parser import chunk_cues
 
 
 def _now() -> str:
@@ -33,24 +31,20 @@ async def run_scrape_job(job_id: str, video_ids: list[int]) -> None:
 
             youtube_id = row["youtube_id"]
 
-            # Skip if already scraped
             if row["scraped_at"] is not None:
                 completed += 1
                 update_job(job_id, completed=completed)
                 continue
 
-            # Check if VTT already downloaded
-            vtt_path = settings.vtt_dir_resolved / f"{youtube_id}.en.vtt"
-            if not vtt_path.exists():
-                vtt_path = download_vtt(youtube_id)
+            cues = fetch_transcript(youtube_id)
 
-            if vtt_path is None or not vtt_path.exists():
-                errors.append({"video_id": vid_id, "youtube_id": youtube_id, "error": "No subtitles available"})
+            if cues is None:
+                errors.append({"video_id": vid_id, "youtube_id": youtube_id, "error": "No transcript available"})
                 completed += 1
                 update_job(job_id, completed=completed)
                 continue
 
-            chunks = parse_and_chunk(vtt_path, vid_id)
+            chunks = chunk_cues(cues, vid_id)
 
             with get_conn() as conn:
                 conn.executemany(
@@ -68,9 +62,8 @@ async def run_scrape_job(job_id: str, video_ids: list[int]) -> None:
         completed += 1
         update_job(job_id, completed=completed)
 
-    final_status = "done" if not errors else "done"  # done even with partial errors
     update_job(
         job_id,
-        status=final_status,
+        status="done",
         error_json=json.dumps(errors) if errors else None,
     )

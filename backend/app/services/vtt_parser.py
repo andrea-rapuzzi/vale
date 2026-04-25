@@ -82,9 +82,8 @@ def _deduplicate(cues: list[dict]) -> list[dict]:
     return result
 
 
-def parse_and_chunk(vtt_path: Path, video_id: int) -> list[dict]:
-    """Parse VTT and return list of chunk dicts ready for DB insertion."""
-    cues = parse_vtt(vtt_path)
+def chunk_cues(cues: list[dict], video_id: int) -> list[dict]:
+    """Convert deduplicated cue list into overlapping chunks ready for DB insertion."""
     cues = _deduplicate(cues)
     if not cues:
         return []
@@ -113,3 +112,8 @@ def parse_and_chunk(vtt_path: Path, video_id: int) -> list[dict]:
         window_start += STEP
 
     return chunks
+
+
+def parse_and_chunk(vtt_path: Path, video_id: int) -> list[dict]:
+    """Parse VTT file and return chunk dicts ready for DB insertion."""
+    return chunk_cues(parse_vtt(vtt_path), video_id)
