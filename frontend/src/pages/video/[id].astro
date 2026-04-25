@@ -1,0 +1,70 @@
+---
+import Base from '../../layouts/Base.astro';
+
+const { id } = Astro.params;
+const apiBase = import.meta.env.BACKEND_URL ?? 'http://localhost:8000';
+
+let data: any = null;
+let error = '';
+try {
+  const res = await fetch(`${apiBase}/api/video/${id}/transcript`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    error = body.detail ?? `HTTP ${res.status}`;
+  } else {
+    data = await res.json();
+  }
+} catch (e: any) {
+  error = e.message;
+}
+
+function fmtTime(s: number) {
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = Math.floor(s % 60);
+  if (h) return `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+  return `${m}:${String(sec).padStart(2,'0')}`;
+}
+---
+<Base title={data?.title ?? 'Transcript'}>
+  {error ? (
+    <div class="text-red-400">{error}</div>
+  ) : (
+    <div class="space-y-6 max-w-3xl">
+      <div class="space-y-2">
+        <a href={`/channel/${data.channel_id}`} class="text-xs text-indigo-400 hover:text-indigo-300">
+          ← {data.channel_name}
+        </a>
+        <h1 class="text-2xl font-bold text-white">{data.title}</h1>
+        <div class="flex items-center gap-3 text-xs text-gray-500">
+          <span>{data.chunks.length} chunks</span>
+          {data.duration_sec && <span>· {fmtTime(data.duration_sec)}</span>}
+          <a
+            href={`https://www.youtube.com/watch?v=${data.youtube_id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="text-indigo-400 hover:text-indigo-300"
+          >
+            ▶ Open on YouTube
+          </a>
+        </div>
+      </div>
+
+      <div class="space-y-3">
+        {data.chunks.map((c: any) => (
+          <div class="flex gap-4 px-4 py-3 rounded-lg bg-gray-900 hover:bg-gray-800 transition-colors group">
+            <a
+              href={`https://www.youtube.com/watch?v=${data.youtube_id}&t=${Math.floor(c.start_sec)}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="shrink-0 font-mono text-xs text-indigo-400 hover:text-indigo-300 pt-0.5 w-16"
+            >
+              {fmtTime(c.start_sec)}
+            </a>
+            <p class="text-sm text-gray-200 leading-relaxed flex-1">{c.text}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  )}
+</Base>

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, HttpUrl, field_validator
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 from typing import Optional
 
 
@@ -36,7 +36,9 @@ class VideoOut(BaseModel):
 
 
 class JobStatusOut(BaseModel):
-    job_id: str
+    model_config = ConfigDict(populate_by_name=True)
+
+    job_id: str = Field(alias="id")
     type: str
     status: str
     completed: int

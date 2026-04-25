@@ -1,3 +1,4 @@
+import asyncio
 import json
 from datetime import datetime, timezone
 from ..database import get_conn
@@ -36,7 +37,7 @@ async def run_scrape_job(job_id: str, video_ids: list[int]) -> None:
                 update_job(job_id, completed=completed)
                 continue
 
-            cues = fetch_transcript(youtube_id)
+            cues = await asyncio.to_thread(fetch_transcript, youtube_id)
 
             if cues is None:
                 errors.append({"video_id": vid_id, "youtube_id": youtube_id, "error": "No transcript available"})
