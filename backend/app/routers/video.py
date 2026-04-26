@@ -13,7 +13,7 @@ async def get_transcript(video_id: int):
                    v.scraped_at, v.channel_id, c.name AS channel_name
             FROM videos v
             JOIN channels c ON c.id = v.channel_id
-            WHERE v.id = ?
+            WHERE v.id = %s
             """,
             (video_id,),
         ).fetchone()
@@ -27,7 +27,7 @@ async def get_transcript(video_id: int):
             """
             SELECT chunk_index, start_sec, end_sec, text
             FROM chunks
-            WHERE video_id = ?
+            WHERE video_id = %s
             ORDER BY chunk_index ASC
             """,
             (video_id,),

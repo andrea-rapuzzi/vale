@@ -4,7 +4,7 @@ from ..database import get_conn
 def generate_report(query_id: int, min_score: int = 1) -> str:
     with get_conn() as conn:
         query_row = conn.execute(
-            "SELECT intent, model, created_at FROM queries WHERE id = ?", (query_id,)
+            "SELECT intent, model, created_at FROM queries WHERE id = %s", (query_id,)
         ).fetchone()
         if query_row is None:
             return "# Query not found\n"
@@ -16,7 +16,7 @@ def generate_report(query_id: int, min_score: int = 1) -> str:
             FROM results r
             JOIN chunks c ON c.id = r.chunk_id
             JOIN videos v ON v.id = c.video_id
-            WHERE r.query_id = ? AND r.score >= ?
+            WHERE r.query_id = %s AND r.score >= %s
             ORDER BY r.score DESC, c.start_sec ASC
             """,
             (query_id, min_score),

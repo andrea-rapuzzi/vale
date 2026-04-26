@@ -7,3 +7,4 @@ yt-dlp>=2024.4.9
 tenacity>=8.3.0
 python-multipart>=0.0.9
 youtube-transcript-api>=1.0.0
+psycopg[binary,pool]>=3.2.0

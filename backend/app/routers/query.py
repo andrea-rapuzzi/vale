@@ -18,11 +18,11 @@ def _now() -> str:
 @router.post("")
 async def start_query(req: QueryRequest, background_tasks: BackgroundTasks):
     with get_conn() as conn:
-        cur = conn.execute(
-            "INSERT INTO queries (intent, model, created_at) VALUES (?, ?, ?)",
+        row = conn.execute(
+            "INSERT INTO queries (intent, model, created_at) VALUES (%s, %s, %s) RETURNING id",
             (req.intent, req.model, _now()),
-        )
-        query_id = cur.lastrowid
+        ).fetchone()
+        query_id = row["id"]
 
     job_id = create_job("query", ref_id=query_id)
     background_tasks.add_task(
@@ -42,14 +42,14 @@ async def query_status(job_id: str):
 @router.get("/{query_id}/results")
 async def get_results(query_id: int, min_score: int = 1, limit: int = 100, offset: int = 0):
     with get_conn() as conn:
-        query_row = conn.execute("SELECT * FROM queries WHERE id = ?", (query_id,)).fetchone()
+        query_row = conn.execute("SELECT * FROM queries WHERE id = %s", (query_id,)).fetchone()
         if query_row is None:
             raise HTTPException(404, "Query not found")
 
         total = conn.execute(
-            "SELECT COUNT(*) FROM results WHERE query_id = ? AND score >= ?",
+            "SELECT COUNT(*) AS total FROM results WHERE query_id = %s AND score >= %s",
             (query_id, min_score),
-        ).fetchone()[0]
+        ).fetchone()["total"]
 
         rows = conn.execute(
             """
@@ -58,9 +58,9 @@ async def get_results(query_id: int, min_score: int = 1, limit: int = 100, offse
             FROM results r
             JOIN chunks c ON c.id = r.chunk_id
             JOIN videos v ON v.id = c.video_id
-            WHERE r.query_id = ? AND r.score >= ?
+            WHERE r.query_id = %s AND r.score >= %s
             ORDER BY r.score DESC, c.start_sec ASC
-            LIMIT ? OFFSET ?
+            LIMIT %s OFFSET %s
             """,
             (query_id, min_score, limit, offset),
         ).fetchall()
@@ -92,7 +92,7 @@ async def get_results(query_id: int, min_score: int = 1, limit: int = 100, offse
 @router.get("/{query_id}/report", response_class=PlainTextResponse)
 async def get_report(query_id: int, min_score: int = 1):
     with get_conn() as conn:
-        exists = conn.execute("SELECT id FROM queries WHERE id = ?", (query_id,)).fetchone()
+        exists = conn.execute("SELECT id FROM queries WHERE id = %s", (query_id,)).fetchone()
     if exists is None:
         raise HTTPException(404, "Query not found")
     return generate_report(query_id, min_score)
@@ -109,7 +109,7 @@ async def list_queries(limit: int = 20, offset: int = 0):
             LEFT JOIN results r ON r.query_id = q.id
             GROUP BY q.id
             ORDER BY q.created_at DESC
-            LIMIT ? OFFSET ?
+            LIMIT %s OFFSET %s
             """,
             (limit, offset),
         ).fetchall()
