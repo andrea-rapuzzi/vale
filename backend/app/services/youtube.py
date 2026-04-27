@@ -133,20 +133,35 @@ def fetch_channel_videos(url: str) -> tuple[str, list[dict]]:
 PREFERRED_LANGS = ["it", "en", "it-orig", "en-orig"]
 
 
-def _fetch_via_transcript_api(youtube_id: str) -> Optional[list[dict]]:
-    """Try youtube-transcript-api. Often IP-blocked; returns None on failure."""
+def _classify_error(msg: str) -> str:
+    """Map a raw error string to one of the known reason codes."""
+    m = msg.lower()
+    if "429" in m or "too many requests" in m or "blocking requests" in m or "ip" in m and "block" in m:
+        return "ip_blocked"
+    if "private" in m or "unavailable" in m or "removed" in m:
+        return "video_unavailable"
+    if "subtitles" in m and ("disabled" in m or "no subtitles" in m):
+        return "transcripts_disabled"
+    return "unknown"
+
+
+def _fetch_via_transcript_api(youtube_id: str) -> tuple[Optional[list[dict]], Optional[str]]:
+    """Try youtube-transcript-api. Returns (cues, reason). Reason is None on success."""
     session = _make_session()
     api = YouTubeTranscriptApi(http_client=session) if session else YouTubeTranscriptApi()
 
     try:
         transcript_list = api.list(youtube_id)
-    except (TranscriptsDisabled, NoTranscriptFound):
-        return None
+    except TranscriptsDisabled:
+        return None, "transcripts_disabled"
+    except NoTranscriptFound:
+        return None, "no_transcript_found"
     except Exception as e:
         log.info("youtube-transcript-api failed for %s: %s", youtube_id, type(e).__name__)
-        return None
+        return None, _classify_error(f"{type(e).__name__}: {e}")
 
     transcript = None
+    last_err: Optional[str] = None
     for generated in (False, True):
         for lang in PREFERRED_LANGS:
             try:
@@ -157,7 +172,8 @@ def _fetch_via_transcript_api(youtube_id: str) -> Optional[list[dict]]:
                 if candidates:
                     transcript = candidates[0].fetch()
                     break
-            except Exception:
+            except Exception as e:
+                last_err = str(e)
                 continue
         if transcript is not None:
             break
@@ -168,13 +184,14 @@ def _fetch_via_transcript_api(youtube_id: str) -> Optional[list[dict]]:
                 try:
                     transcript = t.fetch()
                     break
-                except Exception:
+                except Exception as e:
+                    last_err = str(e)
                     continue
-        except Exception:
-            return None
+        except Exception as e:
+            return None, _classify_error(str(e))
 
     if transcript is None:
-        return None
+        return None, _classify_error(last_err or "no_transcript_found")
 
     cues = []
     for seg in transcript:
@@ -185,16 +202,14 @@ def _fetch_via_transcript_api(youtube_id: str) -> Optional[list[dict]]:
             "end": start + duration,
             "text": seg.text.strip(),
         })
-    return cues
+    return cues, None
 
 
-def _fetch_via_ytdlp(youtube_id: str) -> Optional[list[dict]]:
-    """Download VTT via yt-dlp. Tries each preferred lang individually; the first
-    that returns a file wins. yt-dlp throws on rate-limited langs (e.g. auto-translated
-    'en' for an Italian video), so we isolate per-lang to keep going on 429.
-    """
+def _fetch_via_ytdlp(youtube_id: str) -> tuple[Optional[list[dict]], Optional[str]]:
+    """Download VTT via yt-dlp. Returns (cues, reason). Reason is None on success."""
     url = f"https://www.youtube.com/watch?v={youtube_id}"
     cookies_args = _yt_dlp_cookies_args()
+    last_stderr = ""
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
@@ -213,29 +228,41 @@ def _fetch_via_ytdlp(youtube_id: str) -> Optional[list[dict]]:
                 url,
             ]
             try:
-                subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+                proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+                if proc.stderr:
+                    last_stderr = proc.stderr
             except subprocess.TimeoutExpired:
+                last_stderr = "yt-dlp timed out"
                 continue
 
             vtt_files = list(tmp_path.glob(f"{youtube_id}*.vtt"))
             if vtt_files:
                 cues = parse_vtt(vtt_files[0])
                 if cues:
-                    return cues
+                    return cues, None
                 for f in vtt_files:
                     f.unlink(missing_ok=True)
 
-    return None
+    if last_stderr:
+        return None, _classify_error(last_stderr)
+    return None, "no_transcript_found"
 
 
-def fetch_transcript(youtube_id: str) -> Optional[list[dict]]:
+def fetch_transcript(youtube_id: str) -> tuple[Optional[list[dict]], Optional[str]]:
     """Fetch transcript segments for a video.
 
     Tries youtube-transcript-api first (fast when it works), then falls back to
-    yt-dlp (more robust against IP blocks). Returns list of {start, end, text}
-    dicts, or None if no transcript could be retrieved.
+    yt-dlp (more robust against IP blocks). Returns (cues, reason): cues is the
+    transcript segments on success (reason=None), or None with a reason code
+    on failure. Reason codes: transcripts_disabled, no_transcript_found,
+    ip_blocked, video_unavailable, unknown.
     """
-    cues = _fetch_via_transcript_api(youtube_id)
+    cues, reason1 = _fetch_via_transcript_api(youtube_id)
     if cues:
-        return cues
-    return _fetch_via_ytdlp(youtube_id)
+        return cues, None
+    cues, reason2 = _fetch_via_ytdlp(youtube_id)
+    if cues:
+        return cues, None
+    # Prefer the more informative reason (the more specific one wins over generic "unknown").
+    final_reason = reason1 if reason1 and reason1 != "unknown" else (reason2 or reason1 or "unknown")
+    return None, final_reason

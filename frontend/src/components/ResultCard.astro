@@ -1,7 +1,7 @@
 ---
 interface Props {
-  score: number;
   reasoning: string;
+  topic?: string | null;
   chunk_text: string;
   start_sec: number;
   end_sec: number;
@@ -9,7 +9,7 @@ interface Props {
   video_title: string;
   youtube_url: string;
 }
-const { score, reasoning, chunk_text, start_sec, end_sec, video_title, youtube_url } = Astro.props;
+const { reasoning, topic, chunk_text, start_sec, end_sec, video_title, youtube_url } = Astro.props;
 
 function fmtTime(s: number) {
   const h = Math.floor(s / 3600);
@@ -19,12 +19,6 @@ function fmtTime(s: number) {
   return `${m}:${String(sec).padStart(2,'0')}`;
 }
 
-const badgeClass = score >= 8
-  ? 'bg-green-900 text-green-300'
-  : score >= 5
-  ? 'bg-yellow-900 text-yellow-300'
-  : 'bg-red-900 text-red-300';
-
 const preview = chunk_text.length > 280 ? chunk_text.slice(0, 280) + '…' : chunk_text;
 ---
 <div class="bg-gray-900 rounded-xl p-5 space-y-3 border border-gray-800 hover:border-gray-700 transition-colors">
@@ -33,9 +27,11 @@ const preview = chunk_text.length > 280 ? chunk_text.slice(0, 280) + '…' : chu
       <p class="text-xs text-gray-400 truncate">{video_title}</p>
       <p class="text-sm text-gray-300">{reasoning}</p>
     </div>
-    <span class={`shrink-0 px-2.5 py-1 rounded-full text-sm font-bold ${badgeClass}`}>
-      {score}/10
-    </span>
+    {topic && (
+      <span class="shrink-0 px-2.5 py-1 rounded-full text-xs font-medium bg-indigo-900/60 text-indigo-200 border border-indigo-800">
+        {topic}
+      </span>
+    )}
   </div>
 
   <p class="text-xs text-gray-500 leading-relaxed">{preview}</p>

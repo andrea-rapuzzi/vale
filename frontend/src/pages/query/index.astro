@@ -4,26 +4,12 @@ const apiBase = import.meta.env.BACKEND_URL ?? 'http://localhost:8000';
 
 // Pre-selected video ids from query string (e.g. ?v=1&v=2)
 const preSelected = Astro.url.searchParams.getAll('v').map(Number);
-
-// Fetch all scraped videos for the optional filter
-let scrapedVideos: any[] = [];
-try {
-  const res = await fetch(`${apiBase}/api/channel/0/videos?scraped=true&limit=200`).catch(() => null);
-  // This will 404 for channel 0; instead get all scraped from a global endpoint
-  // We'll fetch via a different approach: list all channels and get their scraped videos
-} catch {}
-
-// Get channels with scraped videos
-let channels: any[] = [];
-try {
-  // We'll just let the user filter by not providing video_ids (search all scraped)
-} catch {}
 ---
 <Base title="New Query">
   <div class="max-w-2xl mx-auto space-y-6">
     <div>
       <h1 class="text-2xl font-bold text-white">New Search Query</h1>
-      <p class="text-sm text-gray-400 mt-1">Describe what you're looking for. Claude will score every transcript chunk 1–10.</p>
+      <p class="text-sm text-gray-400 mt-1">Describe what you're looking for. Claude will identify the transcript chunks that actually discuss the topic.</p>
     </div>
 
     <form id="query-form" class="space-y-4">
@@ -35,26 +21,6 @@ try {
           placeholder="e.g. How to implement rate limiting in Python"
           class="w-full px-4 py-3 rounded-lg bg-gray-900 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm resize-none"
         ></textarea>
-      </div>
-
-      <div>
-        <label class="block text-sm font-medium text-gray-300 mb-1.5">
-          Minimum score to show
-          <span class="text-gray-500 font-normal ml-1">(1 = show all, 7 = relevant only)</span>
-        </label>
-        <input
-          id="min-score"
-          type="range"
-          min="1"
-          max="10"
-          value="5"
-          class="w-full accent-indigo-500"
-        />
-        <div class="flex justify-between text-xs text-gray-500 mt-1">
-          <span>1 — all</span>
-          <span id="score-val" class="text-indigo-400 font-medium">5</span>
-          <span>10 — exact only</span>
-        </div>
       </div>
 
       <p id="query-error" class="text-sm text-red-400 hidden"></p>
@@ -70,26 +36,23 @@ try {
   </div>
 </Base>
 
-<script>
-  const slider = document.getElementById('min-score') as HTMLInputElement;
-  const scoreVal = document.getElementById('score-val')!;
-  slider.addEventListener('input', () => { scoreVal.textContent = slider.value; });
-
-  const form = document.getElementById('query-form')!;
-  const btn = document.getElementById('query-btn') as HTMLButtonElement;
-  const errEl = document.getElementById('query-error')!;
+<script define:vars={{ preSelected }}>
+  const form = document.getElementById('query-form');
+  const btn = document.getElementById('query-btn');
+  const errEl = document.getElementById('query-error');
   const apiBase = import.meta.env.PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const intent = (document.getElementById('intent') as HTMLTextAreaElement).value.trim();
+    const intent = document.getElementById('intent').value.trim();
     if (!intent) { errEl.textContent = 'Please enter a search intent.'; errEl.classList.remove('hidden'); return; }
     errEl.classList.add('hidden');
     btn.disabled = true;
     btn.textContent = 'Starting…';
 
     try {
-      const body: any = { intent, min_score: Number(slider.value) };
+      const body = { intent };
+      if (preSelected && preSelected.length) body.video_ids = preSelected;
       const res = await fetch(`${apiBase}/api/query`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -97,8 +60,8 @@ try {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail ?? 'Error starting query');
-      window.location.href = `/query/${data.query_id}?job=${data.job_id}&min_score=${slider.value}`;
-    } catch (e: any) {
+      window.location.href = `/query/${data.query_id}?job=${data.job_id}`;
+    } catch (e) {
       errEl.textContent = e.message;
       errEl.classList.remove('hidden');
       btn.disabled = false;

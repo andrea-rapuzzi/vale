@@ -11,36 +11,71 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+REASON_MESSAGES = {
+    "transcripts_disabled": "I sottotitoli sono disabilitati per questo video.",
+    "no_transcript_found": "Nessun sottotitolo trovato in italiano o inglese.",
+    "ip_blocked": "YouTube ha bloccato la richiesta (rate-limit). Riprova tra qualche minuto.",
+    "video_unavailable": "Video non disponibile (privato, rimosso o riservato).",
+    "unknown": "Errore sconosciuto durante il recupero del transcript.",
+    "db_missing": "Video non trovato nel database.",
+    "internal": "Errore interno durante l'elaborazione.",
+}
+
+RETRYABLE_REASONS = {"ip_blocked", "unknown", "internal"}
+
+
+def _human_message(reason: str) -> str:
+    return REASON_MESSAGES.get(reason, REASON_MESSAGES["unknown"])
+
+
 async def run_scrape_job(job_id: str, video_ids: list[int]) -> None:
     update_job(job_id, status="running", total=len(video_ids))
     errors = []
     completed = 0
 
     for vid_id in video_ids:
+        title = None
+        youtube_id = None
         try:
             with get_conn() as conn:
                 row = conn.execute(
-                    "SELECT id, youtube_id, scraped_at FROM videos WHERE id = %s",
+                    "SELECT id, youtube_id, title, scraped_at FROM videos WHERE id = %s",
                     (vid_id,),
                 ).fetchone()
 
             if row is None:
-                errors.append({"video_id": vid_id, "error": "Video not found in DB"})
+                errors.append({
+                    "video_id": vid_id,
+                    "youtube_id": None,
+                    "title": None,
+                    "reason": "db_missing",
+                    "message": _human_message("db_missing"),
+                    "retryable": False,
+                })
                 completed += 1
                 update_job(job_id, completed=completed)
                 continue
 
             youtube_id = row["youtube_id"]
+            title = row["title"]
 
             if row["scraped_at"] is not None:
                 completed += 1
                 update_job(job_id, completed=completed)
                 continue
 
-            cues = await asyncio.to_thread(fetch_transcript, youtube_id)
+            cues, reason = await asyncio.to_thread(fetch_transcript, youtube_id)
 
             if cues is None:
-                errors.append({"video_id": vid_id, "youtube_id": youtube_id, "error": "No transcript available"})
+                reason = reason or "unknown"
+                errors.append({
+                    "video_id": vid_id,
+                    "youtube_id": youtube_id,
+                    "title": title,
+                    "reason": reason,
+                    "message": _human_message(reason),
+                    "retryable": reason in RETRYABLE_REASONS,
+                })
                 completed += 1
                 update_job(job_id, completed=completed)
                 continue
@@ -64,7 +99,14 @@ async def run_scrape_job(job_id: str, video_ids: list[int]) -> None:
                 )
 
         except Exception as e:
-            errors.append({"video_id": vid_id, "error": str(e)})
+            errors.append({
+                "video_id": vid_id,
+                "youtube_id": youtube_id,
+                "title": title,
+                "reason": "internal",
+                "message": f"{_human_message('internal')} ({str(e)[:120]})",
+                "retryable": True,
+            })
 
         completed += 1
         update_job(job_id, completed=completed)
