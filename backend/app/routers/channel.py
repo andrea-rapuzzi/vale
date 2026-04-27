@@ -1,10 +1,13 @@
 import asyncio
+import logging
 from datetime import datetime, timezone
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from ..models.api import ChannelFetchRequest, JobStatusOut, VideoOut
 from ..database import get_conn
 from ..jobs import create_job, update_job, get_job
 from ..services.youtube import fetch_channel_videos
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/channel", tags=["channel"])
 channels_router = APIRouter(prefix="/api/channels", tags=["channels"])
@@ -18,27 +21,30 @@ async def _fetch_job(job_id: str, url: str) -> None:
     update_job(job_id, status="running")
     try:
         channel_name, videos = await asyncio.to_thread(fetch_channel_videos, url)
-    except Exception as e:
-        update_job(job_id, status="failed", error_json=str(e))
-        return
 
-    with get_conn() as conn:
-        conn.execute(
-            "INSERT INTO channels (url, name, fetched_at) VALUES (%s, %s, %s) ON CONFLICT(url) DO UPDATE SET name=excluded.name, fetched_at=excluded.fetched_at",
-            (url, channel_name, _now()),
-        )
-        channel_id = conn.execute("SELECT id FROM channels WHERE url = %s", (url,)).fetchone()["id"]
-        if videos:
-            conn.cursor().executemany(
-                """
-                INSERT INTO videos (channel_id, youtube_id, title, duration_sec, upload_date)
-                VALUES (%s, %s, %s, %s, %s)
-                ON CONFLICT(youtube_id) DO NOTHING
-                """,
-                [(channel_id, v["youtube_id"], v["title"], v["duration_sec"], v["upload_date"]) for v in videos],
+        with get_conn() as conn:
+            conn.execute(
+                "INSERT INTO channels (url, name, fetched_at) VALUES (%s, %s, %s) ON CONFLICT(url) DO UPDATE SET name=excluded.name, fetched_at=excluded.fetched_at",
+                (url, channel_name, _now()),
             )
+            channel_id = conn.execute("SELECT id FROM channels WHERE url = %s", (url,)).fetchone()["id"]
+            if videos:
+                conn.cursor().executemany(
+                    """
+                    INSERT INTO videos (channel_id, youtube_id, title, duration_sec, upload_date)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT(youtube_id) DO NOTHING
+                    """,
+                    [(channel_id, v["youtube_id"], v["title"], v["duration_sec"], v["upload_date"]) for v in videos],
+                )
 
-    update_job(job_id, status="done", ref_id=channel_id, total=len(videos), completed=len(videos))
+        update_job(job_id, status="done", ref_id=channel_id, total=len(videos), completed=len(videos))
+    except Exception as e:
+        log.exception("channel_fetch job %s failed for url=%s", job_id, url)
+        try:
+            update_job(job_id, status="failed", error_json=str(e)[:500])
+        except Exception:
+            log.exception("failed to mark job %s as failed", job_id)
 
 
 @router.post("/fetch")

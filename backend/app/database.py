@@ -65,8 +65,11 @@ CREATE TABLE IF NOT EXISTS jobs (
     completed  INTEGER NOT NULL DEFAULT 0,
     total      INTEGER NOT NULL DEFAULT 0,
     error_json TEXT,
-    created_at TEXT NOT NULL
+    created_at TEXT NOT NULL,
+    updated_at TEXT
 );
+
+ALTER TABLE jobs ADD COLUMN IF NOT EXISTS updated_at TEXT;
 """
 
 _pool: ConnectionPool | None = None

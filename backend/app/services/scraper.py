@@ -1,10 +1,13 @@
 import asyncio
 import json
+import logging
 from datetime import datetime, timezone
 from ..database import get_conn
 from ..jobs import update_job
 from .youtube import fetch_transcript
 from .vtt_parser import chunk_cues
+
+log = logging.getLogger(__name__)
 
 
 def _now() -> str:
@@ -32,6 +35,7 @@ async def run_scrape_job(job_id: str, video_ids: list[int]) -> None:
     update_job(job_id, status="running", total=len(video_ids))
     errors = []
     completed = 0
+    fatal: Exception | None = None
 
     for vid_id in video_ids:
         title = None
@@ -111,8 +115,18 @@ async def run_scrape_job(job_id: str, video_ids: list[int]) -> None:
         completed += 1
         update_job(job_id, completed=completed)
 
-    update_job(
-        job_id,
-        status="done",
-        error_json=json.dumps(errors) if errors else None,
-    )
+    try:
+        update_job(
+            job_id,
+            status="done",
+            error_json=json.dumps(errors) if errors else None,
+        )
+    except Exception as e:
+        fatal = e
+        log.exception("scrape job %s: failed to write final 'done' status", job_id)
+        try:
+            update_job(job_id, status="failed", error_json=str(e)[:500])
+        except Exception:
+            log.exception("scrape job %s: also failed to write 'failed' status", job_id)
+    if fatal:
+        raise fatal
