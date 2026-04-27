@@ -9,15 +9,17 @@ from ..jobs import update_job
 SEMAPHORE_LIMIT = 5
 _semaphore = asyncio.Semaphore(SEMAPHORE_LIMIT)
 
-SYSTEM_PROMPT = """You are a relevance evaluator for YouTube transcript search.
-Given a search intent and a transcript chunk, output ONLY valid JSON:
-{"score": <integer 1-10>, "reasoning": "<one sentence, max 20 words>"}
+SYSTEM_PROMPT = """You are a relevance classifier for YouTube transcript search.
+Given a search intent and a transcript chunk, decide whether the chunk
+ACTUALLY DISCUSSES the topic the user is searching for.
 
-Scoring guide:
-1-3: Unrelated to the intent
-4-6: Tangentially related
-7-8: Relevant and useful
-9-10: Directly and specifically addresses the intent"""
+Output ONLY valid JSON:
+{"relevant": true | false, "topic": "<short label, max 5 words>", "reasoning": "<one sentence, max 20 words>"}
+
+Be conservative: mark `true` only if the chunk substantively addresses the
+intent. A passing keyword mention or vaguely related context is NOT enough.
+The `topic` field should describe the specific sub-theme of the chunk in the
+language of the user's intent (used to group results in the UI)."""
 
 
 def _now() -> str:
@@ -44,16 +46,19 @@ async def _score_chunk(
         )
         response = await client.messages.create(
             model=model,
-            max_tokens=128,
+            max_tokens=160,
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user_msg}],
         )
         raw = response.content[0].text.strip()
-        # Strip markdown code fences if present
         raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
         parsed = json.loads(raw)
-        parsed["score"] = max(1, min(10, int(parsed["score"])))
-        return parsed
+        relevant = bool(parsed.get("relevant"))
+        return {
+            "score": 10 if relevant else 0,
+            "topic": (parsed.get("topic") or "").strip()[:60] or None,
+            "reasoning": (parsed.get("reasoning") or "").strip(),
+        }
 
 
 async def run_query_job(
@@ -112,28 +117,29 @@ async def run_query_job(
             with get_conn() as conn:
                 conn.execute(
                     """
-                    INSERT INTO results (query_id, chunk_id, score, reasoning, evaluated_at)
-                    VALUES (%s, %s, %s, %s, %s)
+                    INSERT INTO results (query_id, chunk_id, score, reasoning, topic, evaluated_at)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                     ON CONFLICT (query_id, chunk_id) DO UPDATE SET
                         score = EXCLUDED.score,
                         reasoning = EXCLUDED.reasoning,
+                        topic = EXCLUDED.topic,
                         evaluated_at = EXCLUDED.evaluated_at
                     """,
-                    (query_id, chunk["id"], result["score"], result["reasoning"], _now()),
+                    (query_id, chunk["id"], result["score"], result["reasoning"], result["topic"], _now()),
                 )
         except Exception as e:
-            # Log but don't abort the whole job
             with get_conn() as conn:
                 conn.execute(
                     """
-                    INSERT INTO results (query_id, chunk_id, score, reasoning, evaluated_at)
-                    VALUES (%s, %s, %s, %s, %s)
+                    INSERT INTO results (query_id, chunk_id, score, reasoning, topic, evaluated_at)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                     ON CONFLICT (query_id, chunk_id) DO UPDATE SET
                         score = EXCLUDED.score,
                         reasoning = EXCLUDED.reasoning,
+                        topic = EXCLUDED.topic,
                         evaluated_at = EXCLUDED.evaluated_at
                     """,
-                    (query_id, chunk["id"], 1, f"Evaluation error: {str(e)[:80]}", _now()),
+                    (query_id, chunk["id"], 0, f"Evaluation error: {str(e)[:80]}", None, _now()),
                 )
         evaluated += 1
         update_job(job_id, completed=evaluated)

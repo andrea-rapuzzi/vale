@@ -47,8 +47,9 @@ CREATE TABLE IF NOT EXISTS results (
     id           BIGSERIAL PRIMARY KEY,
     query_id     BIGINT NOT NULL REFERENCES queries(id) ON DELETE CASCADE,
     chunk_id     BIGINT NOT NULL REFERENCES chunks(id) ON DELETE CASCADE,
-    score        INTEGER NOT NULL CHECK(score BETWEEN 1 AND 10),
+    score        INTEGER NOT NULL CHECK(score BETWEEN 0 AND 10),
     reasoning    TEXT NOT NULL,
+    topic        TEXT,
     evaluated_at TEXT NOT NULL,
     UNIQUE(query_id, chunk_id)
 );

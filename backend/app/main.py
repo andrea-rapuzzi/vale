@@ -6,6 +6,7 @@ from .database import init_db, shutdown_pool
 from .routers import channel, scrape, query, video
 from .routers.query import queries_router
 from .routers.channel import channels_router
+from .routers.video import videos_router
 
 
 @asynccontextmanager
@@ -30,6 +31,7 @@ app.include_router(scrape.router)
 app.include_router(query.router)
 app.include_router(queries_router)
 app.include_router(video.router)
+app.include_router(videos_router)
 
 
 @app.get("/api/health")

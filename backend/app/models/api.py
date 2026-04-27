@@ -22,7 +22,6 @@ class ScrapeRequest(BaseModel):
 class QueryRequest(BaseModel):
     intent: str
     video_ids: Optional[list[int]] = None
-    min_score: int = 1
     model: str = "claude-haiku-4-5-20251001"
 
 
@@ -50,6 +49,7 @@ class JobStatusOut(BaseModel):
 class ResultOut(BaseModel):
     score: int
     reasoning: str
+    topic: Optional[str] = None
     chunk_text: str
     start_sec: float
     end_sec: float

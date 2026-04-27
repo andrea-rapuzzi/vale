@@ -15,7 +15,16 @@ const apiBase = import.meta.env.PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
   <div class="w-full bg-gray-800 rounded-full h-2">
     <div id="progress-bar" class="bg-indigo-500 h-2 rounded-full transition-all duration-300" style="width:0%"></div>
   </div>
-  <div id="error-list" class="space-y-1 hidden"></div>
+  <div id="error-list" class="space-y-2 hidden"></div>
+  <div id="retry-row" class="hidden flex items-center gap-3">
+    <button
+      id="retry-btn"
+      class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors disabled:opacity-50"
+    >
+      Riprova i video falliti
+    </button>
+    <span id="retry-status" class="text-xs text-gray-500"></span>
+  </div>
   <div id="done-msg" class="hidden text-green-400 text-sm font-medium">
     ✓ Done!
     {redirectUrl && <a id="done-link" href={redirectUrl} class="ml-2 text-indigo-400 hover:text-indigo-300 underline">Continue →</a>}
@@ -28,10 +37,83 @@ const apiBase = import.meta.env.PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
   const bar = document.getElementById('progress-bar');
   const doneMsg = document.getElementById('done-msg');
   const errorList = document.getElementById('error-list');
+  const retryRow = document.getElementById('retry-row');
+  const retryBtn = document.getElementById('retry-btn');
+  const retryStatus = document.getElementById('retry-status');
 
   const endpoint = type === 'scrape'
     ? `${apiBase}/api/scrape/status/${jobId}`
     : `${apiBase}/api/query/status/${jobId}`;
+
+  function renderErrors(errs) {
+    errorList.innerHTML = '';
+    if (!Array.isArray(errs) || errs.length === 0) return [];
+    errorList.classList.remove('hidden');
+    const retryableIds = [];
+    errs.forEach(e => {
+      const card = document.createElement('div');
+      card.className = 'rounded-lg border border-yellow-900/60 bg-yellow-950/30 px-3 py-2 text-xs space-y-1';
+
+      const titleRow = document.createElement('div');
+      titleRow.className = 'flex items-center justify-between gap-2';
+      if (e.youtube_id) {
+        const link = document.createElement('a');
+        link.href = `https://www.youtube.com/watch?v=${e.youtube_id}`;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.className = 'text-indigo-400 hover:text-indigo-300 truncate font-medium';
+        link.textContent = e.title || e.youtube_id;
+        titleRow.appendChild(link);
+      } else {
+        const span = document.createElement('span');
+        span.className = 'text-gray-300 font-medium';
+        span.textContent = `Video #${e.video_id ?? '?'}`;
+        titleRow.appendChild(span);
+      }
+      const badge = document.createElement('span');
+      badge.className = 'shrink-0 text-[10px] uppercase tracking-wider text-yellow-500/80';
+      badge.textContent = e.reason || 'error';
+      titleRow.appendChild(badge);
+      card.appendChild(titleRow);
+
+      const msg = document.createElement('p');
+      msg.className = 'text-yellow-200/90';
+      msg.textContent = e.message || e.error || 'Errore sconosciuto';
+      card.appendChild(msg);
+
+      errorList.appendChild(card);
+      if (e.retryable && e.video_id) retryableIds.push(e.video_id);
+    });
+    return retryableIds;
+  }
+
+  function showRetry(ids) {
+    if (!ids.length || type !== 'scrape') {
+      retryRow.classList.add('hidden');
+      return;
+    }
+    retryRow.classList.remove('hidden');
+    retryRow.classList.add('flex');
+    retryBtn.disabled = false;
+    retryBtn.textContent = `Riprova i video falliti (${ids.length})`;
+    retryBtn.onclick = async () => {
+      retryBtn.disabled = true;
+      retryStatus.textContent = 'Avvio in corso…';
+      try {
+        const res = await fetch(`${apiBase}/api/scrape`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ video_ids: ids }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail ?? 'Errore avvio retry');
+        window.location.href = `/scrape/${data.job_id}`;
+      } catch (err) {
+        retryStatus.textContent = err.message;
+        retryBtn.disabled = false;
+      }
+    };
+  }
 
   async function poll() {
     try {
@@ -47,27 +129,27 @@ const apiBase = import.meta.env.PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
         setTimeout(poll, 1500);
       } else if (data.status === 'done') {
         bar.style.width = '100%';
-        bar.classList.replace('bg-indigo-500', 'bg-green-500');
         statusText.textContent = 'Complete';
         doneMsg.classList.remove('hidden');
 
+        let retryable = [];
         if (data.error_json) {
           try {
             const errs = JSON.parse(data.error_json);
-            if (Array.isArray(errs) && errs.length > 0) {
-              errorList.classList.remove('hidden');
-              errs.forEach(e => {
-                const p = document.createElement('p');
-                p.className = 'text-xs text-yellow-400';
-                p.textContent = `⚠ ${e.error} (video ${e.video_id ?? ''})`;
-                errorList.appendChild(p);
-              });
-            }
+            retryable = renderErrors(errs);
           } catch {}
         }
+        showRetry(retryable);
 
-        if (redirectUrl) {
-          setTimeout(() => { window.location.href = redirectUrl; }, 1200);
+        const hadErrors = retryable.length > 0 || (errorList.children.length > 0);
+        if (hadErrors) {
+          bar.classList.replace('bg-indigo-500', 'bg-yellow-500');
+          // Don't auto-redirect — leave user on the page to read errors.
+        } else {
+          bar.classList.replace('bg-indigo-500', 'bg-green-500');
+          if (redirectUrl) {
+            setTimeout(() => { window.location.href = redirectUrl; }, 1200);
+          }
         }
       } else if (data.status === 'failed') {
         bar.classList.replace('bg-indigo-500', 'bg-red-500');

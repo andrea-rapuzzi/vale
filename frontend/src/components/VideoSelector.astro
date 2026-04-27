@@ -31,20 +31,18 @@ const apiBase = import.meta.env.PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
           <p class="text-xs text-gray-500 mt-0.5">
             {v.upload_date ? `${v.upload_date.slice(0,4)}-${v.upload_date.slice(4,6)}-${v.upload_date.slice(6,8)}` : ''}
             {v.duration_sec ? ` · ${Math.floor(v.duration_sec/60)}m${v.duration_sec%60}s` : ''}
-            {v.scraped && (
-              <>
-                <span class="ml-2 text-green-500">✓ scraped</span>
-                <a
-                  href={`/video/${v.id}`}
-                  onclick="event.stopPropagation()"
-                  class="ml-2 text-indigo-400 hover:text-indigo-300"
-                >
-                  view transcript →
-                </a>
-              </>
-            )}
+            {v.scraped && <span class="ml-2 text-green-500">✓ scraped</span>}
           </p>
         </div>
+        {v.scraped && (
+          <a
+            href={`/video/${v.id}`}
+            onclick="event.stopPropagation()"
+            class="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium text-indigo-300 bg-indigo-900/40 border border-indigo-800 hover:bg-indigo-900/60 hover:text-indigo-200"
+          >
+            View transcript →
+          </a>
+        )}
       </label>
     ))}
   </div>

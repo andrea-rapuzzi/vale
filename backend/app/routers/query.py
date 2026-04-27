@@ -40,35 +40,36 @@ async def query_status(job_id: str):
 
 
 @router.get("/{query_id}/results")
-async def get_results(query_id: int, min_score: int = 1, limit: int = 100, offset: int = 0):
+async def get_results(query_id: int, limit: int = 200, offset: int = 0):
     with get_conn() as conn:
         query_row = conn.execute("SELECT * FROM queries WHERE id = %s", (query_id,)).fetchone()
         if query_row is None:
             raise HTTPException(404, "Query not found")
 
         total = conn.execute(
-            "SELECT COUNT(*) AS total FROM results WHERE query_id = %s AND score >= %s",
-            (query_id, min_score),
+            "SELECT COUNT(*) AS total FROM results WHERE query_id = %s AND score > 0",
+            (query_id,),
         ).fetchone()["total"]
 
         rows = conn.execute(
             """
-            SELECT r.score, r.reasoning, c.text AS chunk_text,
+            SELECT r.score, r.reasoning, r.topic, c.text AS chunk_text,
                    c.start_sec, c.end_sec, v.youtube_id, v.title AS video_title
             FROM results r
             JOIN chunks c ON c.id = r.chunk_id
             JOIN videos v ON v.id = c.video_id
-            WHERE r.query_id = %s AND r.score >= %s
-            ORDER BY r.score DESC, c.start_sec ASC
+            WHERE r.query_id = %s AND r.score > 0
+            ORDER BY r.topic NULLS LAST, v.title ASC, c.start_sec ASC
             LIMIT %s OFFSET %s
             """,
-            (query_id, min_score, limit, offset),
+            (query_id, limit, offset),
         ).fetchall()
 
     results = [
         ResultOut(
             score=r["score"],
             reasoning=r["reasoning"],
+            topic=r["topic"],
             chunk_text=r["chunk_text"],
             start_sec=r["start_sec"],
             end_sec=r["end_sec"],
@@ -90,12 +91,12 @@ async def get_results(query_id: int, min_score: int = 1, limit: int = 100, offse
 
 
 @router.get("/{query_id}/report", response_class=PlainTextResponse)
-async def get_report(query_id: int, min_score: int = 1):
+async def get_report(query_id: int):
     with get_conn() as conn:
         exists = conn.execute("SELECT id FROM queries WHERE id = %s", (query_id,)).fetchone()
     if exists is None:
         raise HTTPException(404, "Query not found")
-    return generate_report(query_id, min_score)
+    return generate_report(query_id)
 
 
 @queries_router.get("")
