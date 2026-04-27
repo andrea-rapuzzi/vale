@@ -2,6 +2,8 @@
 import Base from '../../layouts/Base.astro';
 import ProgressPoller from '../../components/ProgressPoller.astro';
 const { job_id } = Astro.params;
+const videoParams = Astro.url.searchParams.getAll('v').map(id => `v=${id}`).join('&');
+const redirectUrl = videoParams ? `/chunks?${videoParams}` : '/query';
 ---
 <Base title="Scraping">
   <div class="max-w-lg mx-auto space-y-6 pt-8">
@@ -9,6 +11,6 @@ const { job_id } = Astro.params;
       <h1 class="text-2xl font-bold text-white">Scraping Transcripts</h1>
       <p class="text-sm text-gray-400 mt-1">Downloading and parsing subtitles for selected videos…</p>
     </div>
-    <ProgressPoller jobId={job_id!} type="scrape" redirectUrl="/query" />
+    <ProgressPoller jobId={job_id!} type="scrape" redirectUrl={redirectUrl} />
   </div>
 </Base>

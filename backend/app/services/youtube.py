@@ -50,6 +50,9 @@ def _refresh_cookies_if_needed() -> Optional[Path]:
     ]
     try:
         subprocess.run(cmd, capture_output=True, text=True, timeout=90)
+    except FileNotFoundError:
+        log.warning("yt-dlp not found in PATH; skipping cookie export")
+        return None
     except subprocess.TimeoutExpired:
         pass  # cookies may still have been written
     return cookies_path if cookies_path.exists() else None
@@ -94,7 +97,13 @@ def fetch_channel_videos(url: str) -> tuple[str, list[dict]]:
         *_yt_dlp_cookies_args(),
         url,
     ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+    except FileNotFoundError:
+        raise RuntimeError(
+            "yt-dlp is not installed or not found in PATH. "
+            "Install it with: pip install yt-dlp"
+        )
     if result.returncode != 0:
         raise RuntimeError(f"yt-dlp failed: {result.stderr[:500]}")
 
@@ -231,6 +240,9 @@ def _fetch_via_ytdlp(youtube_id: str) -> tuple[Optional[list[dict]], Optional[st
                 proc = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
                 if proc.stderr:
                     last_stderr = proc.stderr
+            except FileNotFoundError:
+                log.warning("yt-dlp not found in PATH; cannot download subtitles")
+                return None
             except subprocess.TimeoutExpired:
                 last_stderr = "yt-dlp timed out"
                 continue

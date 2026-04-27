@@ -16,7 +16,11 @@ const apiBase = import.meta.env.PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
     {videos.map((v: any) => (
       <label
         data-scraped={v.scraped ? 'true' : 'false'}
-        class="flex items-start gap-3 px-4 py-3 rounded-lg bg-gray-900 hover:bg-gray-800 cursor-pointer transition-colors group"
+        class={`flex items-start gap-3 px-4 py-3 rounded-lg cursor-pointer transition-colors group border-l-2 ${
+          v.scraped
+            ? 'bg-gray-900 border-green-700 hover:bg-gray-800'
+            : 'bg-gray-900 border-transparent hover:bg-gray-800'
+        }`}
       >
         <input
           type="checkbox"
@@ -31,7 +35,7 @@ const apiBase = import.meta.env.PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
           <p class="text-xs text-gray-500 mt-0.5">
             {v.upload_date ? `${v.upload_date.slice(0,4)}-${v.upload_date.slice(4,6)}-${v.upload_date.slice(6,8)}` : ''}
             {v.duration_sec ? ` · ${Math.floor(v.duration_sec/60)}m${v.duration_sec%60}s` : ''}
-            {v.scraped && <span class="ml-2 text-green-500">✓ scraped</span>}
+            {v.scraped && <span class="ml-2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-semibold bg-green-900/60 text-green-400 border border-green-700">✓ scraped</span>}
           </p>
         </div>
         {v.scraped && (
@@ -111,7 +115,8 @@ const apiBase = import.meta.env.PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail ?? 'Error starting scrape');
-      window.location.href = `/scrape/${data.job_id}`;
+      const videoParams = ids.map(id => `v=${id}`).join('&');
+      window.location.href = `/scrape/${data.job_id}?${videoParams}`;
     } catch (e) {
       errEl.textContent = e.message;
       errEl.classList.remove('hidden');

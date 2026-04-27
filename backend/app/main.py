@@ -20,7 +20,7 @@ app = FastAPI(title="YTS — YouTube Transcript Search", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_url, "http://localhost:4321"],
+    allow_origins=[settings.frontend_url, "http://localhost:4321", "http://localhost:4322"],
     allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["*"],
 )

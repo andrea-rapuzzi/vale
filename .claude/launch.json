@@ -7,6 +7,13 @@
       "runtimeArgs": ["run", "dev"],
       "cwd": "${workspaceFolder}/frontend",
       "port": 4321
+    },
+    {
+      "name": "backend",
+      "runtimeExecutable": "uvicorn",
+      "runtimeArgs": ["app.main:app", "--reload", "--port", "8000"],
+      "cwd": "${workspaceFolder}/backend",
+      "port": 8000
     }
   ]
 }

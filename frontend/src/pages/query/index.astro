@@ -1,6 +1,6 @@
 ---
 import Base from '../../layouts/Base.astro';
-const apiBase = import.meta.env.BACKEND_URL ?? 'http://localhost:8000';
+const apiBase = import.meta.env.PUBLIC_BACKEND_URL ?? import.meta.env.BACKEND_URL ?? 'http://localhost:8000';
 
 // Pre-selected video ids from query string (e.g. ?v=1&v=2)
 const preSelected = Astro.url.searchParams.getAll('v').map(Number);
@@ -36,12 +36,10 @@ const preSelected = Astro.url.searchParams.getAll('v').map(Number);
   </div>
 </Base>
 
-<script define:vars={{ preSelected }}>
+<script define:vars={{ apiBase, preSelected }}>
   const form = document.getElementById('query-form');
   const btn = document.getElementById('query-btn');
   const errEl = document.getElementById('query-error');
-  const apiBase = import.meta.env.PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
-
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const intent = document.getElementById('intent').value.trim();
