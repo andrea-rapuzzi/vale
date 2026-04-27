@@ -94,6 +94,7 @@ def fetch_channel_videos(url: str) -> tuple[str, list[dict]]:
         "--flat-playlist",
         "--dump-single-json",
         "--no-warnings",
+        "--playlist-end", "100",
         *_yt_dlp_cookies_args(),
         url,
     ]
