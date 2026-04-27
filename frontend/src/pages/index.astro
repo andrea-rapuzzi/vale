@@ -5,7 +5,7 @@ import ChannelForm from '../components/ChannelForm.astro';
 const apiBase = import.meta.env.BACKEND_URL ?? 'http://localhost:8000';
 let recentChannels: any[] = [];
 try {
-  const res = await fetch(`${apiBase}/api/channels?limit=5`);
+  const res = await fetch(`${apiBase}/api/channels?limit=5`, { signal: AbortSignal.timeout(500) });
   if (res.ok) {
     const data = await res.json();
     recentChannels = data.channels ?? [];

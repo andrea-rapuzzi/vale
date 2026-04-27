@@ -4,7 +4,7 @@
     {
       "name": "frontend",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": ["run", "dev", "--", "--port", "4321", "--host"],
       "cwd": "${workspaceFolder}/frontend",
       "port": 4321
     }
