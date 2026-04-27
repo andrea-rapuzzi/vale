@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timezone
 from fastapi import APIRouter, BackgroundTasks, HTTPException
 from ..models.api import ChannelFetchRequest, JobStatusOut, VideoOut
@@ -6,6 +7,7 @@ from ..jobs import create_job, update_job, get_job
 from ..services.youtube import fetch_channel_videos
 
 router = APIRouter(prefix="/api/channel", tags=["channel"])
+channels_router = APIRouter(prefix="/api/channels", tags=["channels"])
 
 
 def _now() -> str:
@@ -15,25 +17,26 @@ def _now() -> str:
 async def _fetch_job(job_id: str, url: str) -> None:
     update_job(job_id, status="running")
     try:
-        channel_name, videos = fetch_channel_videos(url)
+        channel_name, videos = await asyncio.to_thread(fetch_channel_videos, url)
     except Exception as e:
         update_job(job_id, status="failed", error_json=str(e))
         return
 
     with get_conn() as conn:
         conn.execute(
-            "INSERT INTO channels (url, name, fetched_at) VALUES (?, ?, ?) ON CONFLICT(url) DO UPDATE SET name=excluded.name, fetched_at=excluded.fetched_at",
+            "INSERT INTO channels (url, name, fetched_at) VALUES (%s, %s, %s) ON CONFLICT(url) DO UPDATE SET name=excluded.name, fetched_at=excluded.fetched_at",
             (url, channel_name, _now()),
         )
-        channel_id = conn.execute("SELECT id FROM channels WHERE url = ?", (url,)).fetchone()["id"]
-        conn.executemany(
-            """
-            INSERT INTO videos (channel_id, youtube_id, title, duration_sec, upload_date)
-            VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(youtube_id) DO NOTHING
-            """,
-            [(channel_id, v["youtube_id"], v["title"], v["duration_sec"], v["upload_date"]) for v in videos],
-        )
+        channel_id = conn.execute("SELECT id FROM channels WHERE url = %s", (url,)).fetchone()["id"]
+        if videos:
+            conn.cursor().executemany(
+                """
+                INSERT INTO videos (channel_id, youtube_id, title, duration_sec, upload_date)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT(youtube_id) DO NOTHING
+                """,
+                [(channel_id, v["youtube_id"], v["title"], v["duration_sec"], v["upload_date"]) for v in videos],
+            )
 
     update_job(job_id, status="done", ref_id=channel_id, total=len(videos), completed=len(videos))
 
@@ -61,11 +64,11 @@ async def list_videos(
     scraped: str = "all",
 ):
     with get_conn() as conn:
-        channel = conn.execute("SELECT * FROM channels WHERE id = ?", (channel_id,)).fetchone()
+        channel = conn.execute("SELECT * FROM channels WHERE id = %s", (channel_id,)).fetchone()
         if channel is None:
             raise HTTPException(404, "Channel not found")
 
-        base = "FROM videos WHERE channel_id = ?"
+        base = "FROM videos WHERE channel_id = %s"
         params: list = [channel_id]
 
         if scraped == "true":
@@ -73,14 +76,14 @@ async def list_videos(
         elif scraped == "false":
             base += " AND scraped_at IS NULL"
 
-        total = conn.execute(f"SELECT COUNT(*) {base}", params).fetchone()[0]
+        total = conn.execute(f"SELECT COUNT(*) AS total {base}", params).fetchone()["total"]
         scraped_count = conn.execute(
-            "SELECT COUNT(*) FROM videos WHERE channel_id = ? AND scraped_at IS NOT NULL",
+            "SELECT COUNT(*) AS scraped_count FROM videos WHERE channel_id = %s AND scraped_at IS NOT NULL",
             (channel_id,),
-        ).fetchone()[0]
+        ).fetchone()["scraped_count"]
 
         rows = conn.execute(
-            f"SELECT * {base} ORDER BY upload_date DESC LIMIT ? OFFSET ?",
+            f"SELECT * {base} ORDER BY upload_date DESC NULLS LAST LIMIT %s OFFSET %s",
             params + [limit, offset],
         ).fetchall()
 
@@ -104,4 +107,37 @@ async def list_videos(
         "scraped_count": scraped_count,
         "limit": limit,
         "offset": offset,
+    }
+
+
+@channels_router.get("")
+async def list_channels(limit: int = 20, offset: int = 0):
+    """List recently fetched channels with video and scraped counts."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT c.id, c.url, c.name, c.fetched_at,
+                   COUNT(v.id) AS video_count,
+                   COUNT(v.scraped_at) AS scraped_count
+            FROM channels c
+            LEFT JOIN videos v ON v.channel_id = c.id
+            GROUP BY c.id
+            ORDER BY c.fetched_at DESC
+            LIMIT %s OFFSET %s
+            """,
+            (limit, offset),
+        ).fetchall()
+
+    return {
+        "channels": [
+            {
+                "id": r["id"],
+                "url": r["url"],
+                "name": r["name"],
+                "fetched_at": r["fetched_at"],
+                "video_count": r["video_count"],
+                "scraped_count": r["scraped_count"],
+            }
+            for r in rows
+        ]
     }

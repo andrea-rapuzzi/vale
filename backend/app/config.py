@@ -6,23 +6,17 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     anthropic_api_key: str = ""
-    db_path: str = "./data/yts.db"
-    vtt_dir: str = "./data/vtt"
+    database_url: str = ""  # Postgres connection string (Supabase: pooler URL recommended)
     frontend_url: str = "http://localhost:4321"
-    cookies_browser: str = "chrome"  # browser to export cookies from: chrome, firefox, etc. Set to "" to disable.
+    cookies_browser: str = ""  # browser to export cookies from: chrome, firefox, etc. Set to "" to disable. Set COOKIES_BROWSER=chrome in .env for local use.
     cookies_max_age_hours: int = 12  # refresh cookie file after this many hours
-
-    @property
-    def db_path_resolved(self) -> Path:
-        return Path(self.db_path).resolve()
-
-    @property
-    def vtt_dir_resolved(self) -> Path:
-        return Path(self.vtt_dir).resolve()
+    cookies_dir: str = "./data"  # local directory for the cached cookies.txt file
 
     @property
     def cookies_file_resolved(self) -> Path:
-        return Path(self.db_path).resolve().parent / "cookies.txt"
+        p = Path(self.cookies_dir).resolve()
+        p.mkdir(parents=True, exist_ok=True)
+        return p / "cookies.txt"
 
 
 settings = Settings()

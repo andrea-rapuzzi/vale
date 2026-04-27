@@ -1,3 +1,4 @@
+import asyncio
 import json
 from datetime import datetime, timezone
 from ..database import get_conn
@@ -19,7 +20,7 @@ async def run_scrape_job(job_id: str, video_ids: list[int]) -> None:
         try:
             with get_conn() as conn:
                 row = conn.execute(
-                    "SELECT id, youtube_id, scraped_at FROM videos WHERE id = ?",
+                    "SELECT id, youtube_id, scraped_at FROM videos WHERE id = %s",
                     (vid_id,),
                 ).fetchone()
 
@@ -36,7 +37,7 @@ async def run_scrape_job(job_id: str, video_ids: list[int]) -> None:
                 update_job(job_id, completed=completed)
                 continue
 
-            cues = fetch_transcript(youtube_id)
+            cues = await asyncio.to_thread(fetch_transcript, youtube_id)
 
             if cues is None:
                 errors.append({"video_id": vid_id, "youtube_id": youtube_id, "error": "No transcript available"})
@@ -47,12 +48,18 @@ async def run_scrape_job(job_id: str, video_ids: list[int]) -> None:
             chunks = chunk_cues(cues, vid_id)
 
             with get_conn() as conn:
-                conn.executemany(
-                    "INSERT OR IGNORE INTO chunks (video_id, chunk_index, start_sec, end_sec, text) VALUES (?,?,?,?,?)",
-                    [(c["video_id"], c["chunk_index"], c["start_sec"], c["end_sec"], c["text"]) for c in chunks],
-                )
+                if chunks:
+                    with conn.cursor() as cur:
+                        cur.executemany(
+                            """
+                            INSERT INTO chunks (video_id, chunk_index, start_sec, end_sec, text)
+                            VALUES (%s,%s,%s,%s,%s)
+                            ON CONFLICT (video_id, chunk_index) DO NOTHING
+                            """,
+                            [(c["video_id"], c["chunk_index"], c["start_sec"], c["end_sec"], c["text"]) for c in chunks],
+                        )
                 conn.execute(
-                    "UPDATE videos SET scraped_at = ? WHERE id = ?",
+                    "UPDATE videos SET scraped_at = %s WHERE id = %s",
                     (_now(), vid_id),
                 )
 

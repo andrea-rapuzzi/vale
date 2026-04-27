@@ -1,9 +1,6 @@
-from contextlib import contextmanager
-from psycopg_pool import ConnectionPool
-from psycopg.rows import dict_row
-from .config import settings
+-- YTS — initial schema for Supabase Postgres.
+-- Apply this in Supabase dashboard → SQL Editor → New query.
 
-DDL = """
 CREATE TABLE IF NOT EXISTS channels (
     id         BIGSERIAL PRIMARY KEY,
     url        TEXT NOT NULL UNIQUE,
@@ -66,42 +63,3 @@ CREATE TABLE IF NOT EXISTS jobs (
     error_json TEXT,
     created_at TEXT NOT NULL
 );
-"""
-
-_pool: ConnectionPool | None = None
-
-
-def _get_pool() -> ConnectionPool:
-    global _pool
-    if _pool is None:
-        if not settings.database_url:
-            raise RuntimeError(
-                "DATABASE_URL is not set. Configure it in your .env or environment."
-            )
-        _pool = ConnectionPool(
-            settings.database_url,
-            min_size=1,
-            max_size=10,
-            kwargs={"row_factory": dict_row},
-            open=True,
-        )
-        _pool.wait()
-    return _pool
-
-
-def init_db() -> None:
-    with _get_pool().connection() as conn:
-        conn.execute(DDL)
-
-
-@contextmanager
-def get_conn():
-    with _get_pool().connection() as conn:
-        yield conn
-
-
-def shutdown_pool() -> None:
-    global _pool
-    if _pool is not None:
-        _pool.close()
-        _pool = None

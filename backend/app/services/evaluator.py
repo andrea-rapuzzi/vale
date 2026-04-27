@@ -68,19 +68,18 @@ async def run_query_job(
     # Fetch chunks to evaluate (skip already evaluated ones)
     with get_conn() as conn:
         if video_ids:
-            placeholders = ",".join("?" * len(video_ids))
             rows = conn.execute(
-                f"""
+                """
                 SELECT c.id, c.start_sec, c.end_sec, c.text, v.youtube_id, v.title AS video_title
                 FROM chunks c
                 JOIN videos v ON v.id = c.video_id
-                WHERE v.id IN ({placeholders})
+                WHERE v.id = ANY(%s)
                   AND v.scraped_at IS NOT NULL
                   AND c.id NOT IN (
-                      SELECT chunk_id FROM results WHERE query_id = ?
+                      SELECT chunk_id FROM results WHERE query_id = %s
                   )
                 """,
-                (*video_ids, query_id),
+                (list(video_ids), query_id),
             ).fetchall()
         else:
             rows = conn.execute(
@@ -90,7 +89,7 @@ async def run_query_job(
                 JOIN videos v ON v.id = c.video_id
                 WHERE v.scraped_at IS NOT NULL
                   AND c.id NOT IN (
-                      SELECT chunk_id FROM results WHERE query_id = ?
+                      SELECT chunk_id FROM results WHERE query_id = %s
                   )
                 """,
                 (query_id,),
@@ -113,8 +112,12 @@ async def run_query_job(
             with get_conn() as conn:
                 conn.execute(
                     """
-                    INSERT OR REPLACE INTO results (query_id, chunk_id, score, reasoning, evaluated_at)
-                    VALUES (?, ?, ?, ?, ?)
+                    INSERT INTO results (query_id, chunk_id, score, reasoning, evaluated_at)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (query_id, chunk_id) DO UPDATE SET
+                        score = EXCLUDED.score,
+                        reasoning = EXCLUDED.reasoning,
+                        evaluated_at = EXCLUDED.evaluated_at
                     """,
                     (query_id, chunk["id"], result["score"], result["reasoning"], _now()),
                 )
@@ -123,8 +126,12 @@ async def run_query_job(
             with get_conn() as conn:
                 conn.execute(
                     """
-                    INSERT OR REPLACE INTO results (query_id, chunk_id, score, reasoning, evaluated_at)
-                    VALUES (?, ?, ?, ?, ?)
+                    INSERT INTO results (query_id, chunk_id, score, reasoning, evaluated_at)
+                    VALUES (%s, %s, %s, %s, %s)
+                    ON CONFLICT (query_id, chunk_id) DO UPDATE SET
+                        score = EXCLUDED.score,
+                        reasoning = EXCLUDED.reasoning,
+                        evaluated_at = EXCLUDED.evaluated_at
                     """,
                     (query_id, chunk["id"], 1, f"Evaluation error: {str(e)[:80]}", _now()),
                 )
