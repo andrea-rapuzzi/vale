@@ -31,13 +31,16 @@
   const apiBase = import.meta.env.PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
 
   async function poll(jobId: string): Promise<any> {
-    while (true) {
+    const maxAttempts = 400; // ~10 minuti totali con backoff
+    for (let i = 0; i < maxAttempts; i++) {
       const r = await fetch(`${apiBase}/api/channel/fetch/status/${jobId}`);
       const data = await r.json();
       if (data.status === 'done') return data;
       if (data.status === 'failed') throw new Error(data.error_json ?? 'Fetch failed');
-      await new Promise(res => setTimeout(res, 1500));
+      const delay = i < 30 ? 1500 : 3000;
+      await new Promise(res => setTimeout(res, delay));
     }
+    throw new Error('Timeout: il fetch del canale richiede troppo tempo. Riprova fra qualche minuto.');
   }
 
   btn.addEventListener('click', async () => {
