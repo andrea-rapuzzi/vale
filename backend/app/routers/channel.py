@@ -83,7 +83,7 @@ async def list_videos(
         ).fetchone()["scraped_count"]
 
         rows = conn.execute(
-            f"SELECT * {base} ORDER BY upload_date DESC NULLS LAST LIMIT %s OFFSET %s",
+            f"SELECT * {base} ORDER BY (scraped_at IS NOT NULL) DESC, upload_date DESC NULLS LAST LIMIT %s OFFSET %s",
             params + [limit, offset],
         ).fetchall()
 

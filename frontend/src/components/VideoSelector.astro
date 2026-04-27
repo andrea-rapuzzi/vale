@@ -5,11 +5,22 @@ interface Props {
 }
 const { videos, channelId } = Astro.props;
 const apiBase = import.meta.env.PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
+const scrapedCount = videos.filter((v: any) => v.scraped).length;
 ---
 <div class="space-y-4">
-  <div class="flex items-center justify-between">
+  <div class="flex items-center justify-between gap-4">
     <p class="text-sm text-gray-400">Select up to <strong class="text-white">10 videos</strong> to scrape transcripts.</p>
-    <span id="sel-count" class="text-sm font-medium text-indigo-400">0 selected</span>
+    <div class="flex items-center gap-3 shrink-0">
+      {scrapedCount > 0 && (
+        <button
+          id="scraped-toggle"
+          class="text-xs px-2.5 py-1 rounded-md border border-green-700 text-green-400 hover:bg-green-900/40 transition-colors"
+        >
+          Show scraped ({scrapedCount})
+        </button>
+      )}
+      <span id="sel-count" class="text-sm font-medium text-indigo-400">0 selected</span>
+    </div>
   </div>
 
   <div class="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
@@ -71,7 +82,7 @@ const apiBase = import.meta.env.PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
   <p id="sel-error" class="text-sm text-red-400 hidden"></p>
 </div>
 
-<script define:vars={{ apiBase }}>
+<script define:vars={{ apiBase, scrapedCount }}>
   const checkboxes = document.querySelectorAll('.video-cb');
   const scrapeBtn = document.getElementById('scrape-btn');
   const searchBtn = document.getElementById('search-btn');
@@ -100,6 +111,22 @@ const apiBase = import.meta.env.PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
   }
 
   checkboxes.forEach(cb => cb.addEventListener('change', update));
+
+  // Scraped-only toggle
+  const toggleBtn = document.getElementById('scraped-toggle');
+  const allLabels = document.querySelectorAll('label[data-scraped]');
+  let scrapedOnly = false;
+  if (toggleBtn && scrapedCount > 0) {
+    toggleBtn.addEventListener('click', () => {
+      scrapedOnly = !scrapedOnly;
+      allLabels.forEach(label => {
+        const isScraped = label.dataset.scraped === 'true';
+        label.style.display = scrapedOnly && !isScraped ? 'none' : '';
+      });
+      toggleBtn.textContent = scrapedOnly ? `Show all` : `Show scraped (${scrapedCount})`;
+      toggleBtn.classList.toggle('bg-green-900/40', scrapedOnly);
+    });
+  }
 
   scrapeBtn.addEventListener('click', async () => {
     const ids = getSelected();
