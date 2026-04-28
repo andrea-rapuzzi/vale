@@ -70,13 +70,6 @@ const scrapedCount = videos.filter((v: any) => v.scraped).length;
     >
       Scrape Selected
     </button>
-    <button
-      id="search-btn"
-      disabled
-      class="px-5 py-2.5 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-    >
-      Search Selected (already scraped)
-    </button>
   </div>
 
   <p id="sel-error" class="text-sm text-red-400 hidden"></p>
@@ -85,7 +78,6 @@ const scrapedCount = videos.filter((v: any) => v.scraped).length;
 <script define:vars={{ apiBase, scrapedCount }}>
   const checkboxes = document.querySelectorAll('.video-cb');
   const scrapeBtn = document.getElementById('scrape-btn');
-  const searchBtn = document.getElementById('search-btn');
   const countEl = document.getElementById('sel-count');
   const errEl = document.getElementById('sel-error');
 
@@ -98,11 +90,6 @@ const scrapedCount = videos.filter((v: any) => v.scraped).length;
     const count = sel.length;
     countEl.textContent = `${count} selected`;
     scrapeBtn.disabled = count === 0;
-    // Enable search only if at least one selected video is already scraped
-    const hasScraped = Array.from(checkboxes)
-      .filter(cb => cb.checked)
-      .some(cb => cb.closest('label').dataset.scraped === 'true');
-    searchBtn.disabled = !hasScraped;
 
     // Enforce max 10: disable unchecked if already at limit
     checkboxes.forEach(cb => {
@@ -152,9 +139,4 @@ const scrapedCount = videos.filter((v: any) => v.scraped).length;
     }
   });
 
-  searchBtn.addEventListener('click', () => {
-    const ids = getSelected();
-    const params = ids.map(id => `v=${id}`).join('&');
-    window.location.href = `/query?${params}`;
-  });
 </script>

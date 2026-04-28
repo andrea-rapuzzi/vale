@@ -1,5 +1,7 @@
 from fastapi import APIRouter, HTTPException
 from ..database import get_conn
+from ..models.api import AISearchRequest
+from ..services.ai_search import ai_search
 
 router = APIRouter(prefix="/api/video", tags=["video"])
 videos_router = APIRouter(prefix="/api/videos", tags=["videos"])
@@ -95,3 +97,57 @@ async def get_transcript(video_id: int):
             for c in chunks
         ],
     }
+
+
+@router.post("/{video_id}/ai-search")
+async def video_ai_search(video_id: int, body: AISearchRequest):
+    with get_conn() as conn:
+        video = conn.execute(
+            """
+            SELECT v.id, v.youtube_id, v.title, v.scraped_at
+            FROM videos v
+            WHERE v.id = %s
+            """,
+            (video_id,),
+        ).fetchone()
+
+        if video is None:
+            raise HTTPException(404, "Video not found")
+        if video["scraped_at"] is None:
+            raise HTTPException(400, "Video not yet scraped")
+
+        rows = conn.execute(
+            """
+            SELECT chunk_index, start_sec, end_sec, text
+            FROM chunks
+            WHERE video_id = %s
+            ORDER BY chunk_index ASC
+            """,
+            (video_id,),
+        ).fetchall()
+
+    chunks = [
+        {
+            "index": r["chunk_index"],
+            "start_sec": r["start_sec"],
+            "end_sec": r["end_sec"],
+            "text": r["text"],
+        }
+        for r in rows
+    ]
+
+    try:
+        result = await ai_search(body.question, video["title"], chunks, body.model)
+    except Exception as e:
+        cause = e
+        # Tenacity RetryError wraps the real exception in last_attempt.exception()
+        last_attempt = getattr(e, "last_attempt", None)
+        if last_attempt is not None:
+            try:
+                cause = last_attempt.exception() or e
+            except Exception:
+                cause = e
+        msg = f"{type(cause).__name__}: {cause}"
+        raise HTTPException(502, f"AI search failed: {msg[:300]}")
+
+    return result

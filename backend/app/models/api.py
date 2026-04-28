@@ -25,6 +25,18 @@ class QueryRequest(BaseModel):
     model: str = "claude-haiku-4-5-20251001"
 
 
+class AISearchRequest(BaseModel):
+    question: str
+    model: str = "claude-haiku-4-5-20251001"
+
+    @field_validator("question")
+    @classmethod
+    def non_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Question cannot be empty")
+        return v.strip()
+
+
 class VideoOut(BaseModel):
     id: int
     youtube_id: str
