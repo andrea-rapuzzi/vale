@@ -1,13 +1,11 @@
 import { createServerClient, parseCookieHeader } from '@supabase/ssr'
 import type { MiddlewareHandler } from 'astro'
 
-const PUBLIC_PATHS = new Set(['/login', '/register', '/pending'])
-
 export const onRequest: MiddlewareHandler = async (context, next) => {
   const pathname = context.url.pathname
 
-  // Skip auth check for public pages
-  if (PUBLIC_PATHS.has(pathname)) {
+  // Pages that don't require auth
+  if (pathname === '/login' || pathname === '/register') {
     return next()
   }
 
@@ -32,6 +30,30 @@ export const onRequest: MiddlewareHandler = async (context, next) => {
 
   if (!session) {
     return context.redirect('/login')
+  }
+
+  // Check approval status against the backend
+  const backendUrl = import.meta.env.BACKEND_URL ?? 'http://localhost:8000'
+  let approved = false
+  try {
+    const res = await fetch(`${backendUrl}/api/auth/me`, {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+      signal: AbortSignal.timeout(3000),
+    })
+    approved = res.ok
+  } catch {
+    // Backend unreachable — let through rather than blocking the user
+    approved = true
+  }
+
+  if (!approved) {
+    if (pathname === '/pending') return next()
+    return context.redirect('/pending')
+  }
+
+  // If approved and trying to visit /pending, redirect home
+  if (pathname === '/pending') {
+    return context.redirect('/')
   }
 
   context.locals.accessToken = session.access_token
