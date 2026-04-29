@@ -272,7 +272,7 @@ function fmtTime(s: number) {
       try {
         const res = await fetch(`${publicApiBase}/api/video/${videoId}/ai-search`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${window.__authToken}` },
           body: JSON.stringify({ question }),
         });
         const body = await res.json().catch(() => ({}));

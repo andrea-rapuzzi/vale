@@ -1,11 +1,12 @@
 import asyncio
 import logging
 from datetime import datetime, timezone
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from ..models.api import ChannelFetchRequest, JobStatusOut, VideoOut
 from ..database import get_conn
 from ..jobs import create_job, update_job, get_job
 from ..services.youtube import fetch_channel_videos
+from ..auth import require_approved_user
 
 log = logging.getLogger(__name__)
 
@@ -48,7 +49,11 @@ async def _fetch_job(job_id: str, url: str) -> None:
 
 
 @router.post("/fetch")
-async def fetch_channel(req: ChannelFetchRequest, background_tasks: BackgroundTasks):
+async def fetch_channel(
+    req: ChannelFetchRequest,
+    background_tasks: BackgroundTasks,
+    _user: dict = Depends(require_approved_user),
+):
     job_id = create_job("channel_fetch")
     background_tasks.add_task(_fetch_job, job_id, req.url)
     return {"job_id": job_id, "status": "queued"}

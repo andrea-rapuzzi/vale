@@ -7,6 +7,7 @@ const { query_id } = Astro.params;
 const jobId = Astro.url.searchParams.get('job');
 
 const apiBase = import.meta.env.BACKEND_URL ?? 'http://localhost:8000';
+const authHeader = { Authorization: `Bearer ${Astro.locals.accessToken}` };
 
 let query: any = null;
 let results: any[] = [];
@@ -27,7 +28,7 @@ if (jobId) {
 }
 
 try {
-  const res = await fetch(`${apiBase}/api/query/${query_id}/results?limit=200`);
+  const res = await fetch(`${apiBase}/api/query/${query_id}/results?limit=200`, { headers: authHeader });
   if (!res.ok) { error = 'Query not found'; }
   else {
     const data = await res.json();

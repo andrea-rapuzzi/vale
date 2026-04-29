@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from ..database import get_conn
 from ..models.api import AISearchRequest
 from ..services.ai_search import ai_search
+from ..auth import require_approved_user
 
 router = APIRouter(prefix="/api/video", tags=["video"])
 videos_router = APIRouter(prefix="/api/videos", tags=["videos"])
@@ -100,7 +101,11 @@ async def get_transcript(video_id: int):
 
 
 @router.post("/{video_id}/ai-search")
-async def video_ai_search(video_id: int, body: AISearchRequest):
+async def video_ai_search(
+    video_id: int,
+    body: AISearchRequest,
+    _user: dict = Depends(require_approved_user),
+):
     with get_conn() as conn:
         video = conn.execute(
             """

@@ -1,11 +1,12 @@
 from datetime import datetime, timezone
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from fastapi.responses import PlainTextResponse
 from ..models.api import QueryRequest, JobStatusOut, ResultOut, QueryOut
 from ..database import get_conn
 from ..jobs import create_job, get_job
 from ..services.evaluator import run_query_job
 from ..services.reporter import generate_report
+from ..auth import require_approved_user
 
 router = APIRouter(prefix="/api/query", tags=["query"])
 queries_router = APIRouter(prefix="/api/queries", tags=["queries"])
@@ -16,7 +17,11 @@ def _now() -> str:
 
 
 @router.post("")
-async def start_query(req: QueryRequest, background_tasks: BackgroundTasks):
+async def start_query(
+    req: QueryRequest,
+    background_tasks: BackgroundTasks,
+    _user: dict = Depends(require_approved_user),
+):
     with get_conn() as conn:
         row = conn.execute(
             "INSERT INTO queries (intent, model, created_at) VALUES (%s, %s, %s) RETURNING id",
@@ -40,7 +45,12 @@ async def query_status(job_id: str):
 
 
 @router.get("/{query_id}/results")
-async def get_results(query_id: int, limit: int = 200, offset: int = 0):
+async def get_results(
+    query_id: int,
+    limit: int = 200,
+    offset: int = 0,
+    _user: dict = Depends(require_approved_user),
+):
     with get_conn() as conn:
         query_row = conn.execute("SELECT * FROM queries WHERE id = %s", (query_id,)).fetchone()
         if query_row is None:
@@ -91,7 +101,7 @@ async def get_results(query_id: int, limit: int = 200, offset: int = 0):
 
 
 @router.get("/{query_id}/report", response_class=PlainTextResponse)
-async def get_report(query_id: int):
+async def get_report(query_id: int, _user: dict = Depends(require_approved_user)):
     with get_conn() as conn:
         exists = conn.execute("SELECT id FROM queries WHERE id = %s", (query_id,)).fetchone()
     if exists is None:
