@@ -32,18 +32,19 @@ export const onRequest: MiddlewareHandler = async (context, next) => {
     return context.redirect('/login')
   }
 
-  // Check approval status against the backend
+  // Check approval status against the backend.
+  // Default to approved — only an explicit 403 means "not approved yet".
+  // Any other status (404, 5xx, network error) lets the user through.
   const backendUrl = import.meta.env.BACKEND_URL ?? 'http://localhost:8000'
-  let approved = false
+  let approved = true
   try {
     const res = await fetch(`${backendUrl}/api/auth/me`, {
       headers: { Authorization: `Bearer ${session.access_token}` },
       signal: AbortSignal.timeout(3000),
     })
-    approved = res.ok
+    if (res.status === 403) approved = false
   } catch {
-    // Backend unreachable — let through rather than blocking the user
-    approved = true
+    // Backend unreachable — let through
   }
 
   if (!approved) {
