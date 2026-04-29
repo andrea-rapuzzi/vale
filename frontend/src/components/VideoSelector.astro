@@ -124,7 +124,7 @@ const scrapedCount = videos.filter((v: any) => v.scraped).length;
     try {
       const res = await fetch(`${apiBase}/api/scrape`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${window.__authToken}` },
         body: JSON.stringify({ video_ids: ids }),
       });
       const data = await res.json();

@@ -53,7 +53,7 @@
     try {
       const res = await fetch(`${apiBase}/api/channel/fetch`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${window.__authToken}` },
         body: JSON.stringify({ url }),
       });
       const data = await res.json();

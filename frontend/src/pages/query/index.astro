@@ -53,7 +53,7 @@ const preSelected = Astro.url.searchParams.getAll('v').map(Number);
       if (preSelected && preSelected.length) body.video_ids = preSelected;
       const res = await fetch(`${apiBase}/api/query`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${window.__authToken}` },
         body: JSON.stringify(body),
       });
       const data = await res.json();

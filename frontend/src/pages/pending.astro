@@ -1,0 +1,41 @@
+---
+import '../styles/global.css';
+---
+<!doctype html>
+<html lang="en" class="bg-gray-950 text-gray-100 min-h-screen">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>Pending Approval — VALE</title>
+  </head>
+  <body class="min-h-screen flex items-center justify-center px-4">
+    <div class="w-full max-w-sm space-y-6 text-center">
+      <h1 class="text-2xl font-bold text-white">VALE</h1>
+
+      <div class="rounded-lg bg-yellow-950 border border-yellow-800 px-5 py-4 space-y-2 text-left">
+        <p class="text-sm font-medium text-yellow-300">Account pending approval</p>
+        <p class="text-sm text-yellow-200/70">
+          Your account has been created and is waiting for an admin to approve it.
+          Once approved, reload this page or sign in again to access the platform.
+        </p>
+      </div>
+
+      <button
+        id="logout-btn"
+        class="text-sm text-gray-500 hover:text-gray-300 transition-colors"
+      >
+        Sign out
+      </button>
+    </div>
+  </body>
+</html>
+
+<script>
+  import { createClient } from '../lib/supabase'
+
+  document.getElementById('logout-btn')!.addEventListener('click', async () => {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    window.location.href = '/login'
+  })
+</script>

@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
 from .database import init_db, shutdown_pool
@@ -7,6 +7,7 @@ from .routers import channel, scrape, query, video
 from .routers.query import queries_router
 from .routers.channel import channels_router
 from .routers.video import videos_router
+from .auth import require_approved_user
 
 
 @asynccontextmanager
@@ -37,3 +38,8 @@ app.include_router(videos_router)
 @app.get("/api/health")
 async def health():
     return {"status": "ok"}
+
+
+@app.get("/api/auth/me")
+async def auth_me(user: dict = Depends(require_approved_user)):
+    return {"user_id": user["user_id"], "email": user["email"]}
