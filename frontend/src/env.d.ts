@@ -9,4 +9,5 @@ declare namespace App {
 
 interface Window {
   __authToken: string
+  __getAuthToken: () => Promise<string>
 }
