@@ -37,9 +37,13 @@ const userEmail = Astro.locals.userEmail ?? ''
 
 <script>
   import { createClient } from '../lib/supabase'
+  const _supabase = createClient()
+  window.__getAuthToken = async () => {
+    const { data: { session } } = await _supabase.auth.getSession()
+    return session?.access_token ?? window.__authToken ?? ''
+  }
   document.getElementById('logout-btn')?.addEventListener('click', async () => {
-    const supabase = createClient()
-    await supabase.auth.signOut()
+    await _supabase.auth.signOut()
     window.location.href = '/login'
   })
 </script>
