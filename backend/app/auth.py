@@ -1,8 +1,11 @@
 import jwt
+import logging
 from datetime import datetime, timezone
 from fastapi import HTTPException, Request
 from .config import settings
 from .database import get_conn
+
+logger = logging.getLogger(__name__)
 
 
 def _decode_jwt(request: Request) -> dict:
@@ -21,7 +24,8 @@ def _decode_jwt(request: Request) -> dict:
         )
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.InvalidTokenError:
+    except jwt.InvalidTokenError as e:
+        logger.warning("JWT decode failed (%s): %s", type(e).__name__, str(e))
         raise HTTPException(status_code=401, detail="Invalid token")
 
 
