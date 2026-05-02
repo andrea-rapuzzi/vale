@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from fastapi import Depends, FastAPI
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
 from .database import init_db, shutdown_pool
@@ -48,35 +48,33 @@ async def auth_me(user: dict = Depends(require_approved_user)):
 @app.get("/api/auth/debug")
 async def auth_debug(request: Request):
     """Diagnose JWT configuration without exposing secrets."""
-    from .config import settings
     import jwt as pyjwt
+    from jwt import PyJWKClient, PyJWKClientError
     auth_header = request.headers.get("Authorization", "")
     has_bearer = auth_header.startswith("Bearer ")
     token = auth_header[7:] if has_bearer else ""
-    secret_len = len(settings.supabase_jwt_secret)
-    secret_looks_like_jwt = settings.supabase_jwt_secret.startswith("eyJ")
 
     result: dict = {
         "has_bearer": has_bearer,
         "token_length": len(token),
-        "secret_configured": secret_len > 0,
-        "secret_length": secret_len,
-        "secret_looks_like_jwt_key_error": secret_looks_like_jwt,
+        "supabase_url_configured": bool(settings.supabase_url),
+        "jwt_secret_configured": bool(settings.supabase_jwt_secret),
+        "jwt_secret_looks_like_jwt": settings.supabase_jwt_secret.startswith("eyJ"),
     }
 
-    if token and secret_len > 0:
+    if token and settings.supabase_url:
         try:
-            pyjwt.decode(token, settings.supabase_jwt_secret, algorithms=["HS256"], audience="authenticated")
-            result["decode_result"] = "ok"
+            client = PyJWKClient(f"{settings.supabase_url}/auth/v1/.well-known/jwks.json")
+            signing_key = client.get_signing_key_from_jwt(token)
+            pyjwt.decode(token, signing_key.key, algorithms=["ES256", "RS256"], audience="authenticated")
+            result["jwks_decode"] = "ok"
+        except PyJWKClientError as e:
+            result["jwks_decode"] = f"key_not_in_jwks: {e}"
         except pyjwt.ExpiredSignatureError:
-            result["decode_result"] = "expired"
-        except pyjwt.InvalidAudienceError:
-            result["decode_result"] = "wrong_audience"
-        except pyjwt.InvalidSignatureError:
-            result["decode_result"] = "wrong_secret"
-        except pyjwt.DecodeError as e:
-            result["decode_result"] = f"malformed_token: {e}"
+            result["jwks_decode"] = "expired"
         except pyjwt.InvalidTokenError as e:
-            result["decode_result"] = f"invalid: {type(e).__name__}"
+            result["jwks_decode"] = f"{type(e).__name__}"
+        except Exception as e:
+            result["jwks_decode"] = f"error: {e}"
 
     return result
