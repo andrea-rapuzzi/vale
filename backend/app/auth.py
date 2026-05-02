@@ -1,11 +1,22 @@
 import jwt
 import logging
+from functools import lru_cache
 from datetime import datetime, timezone
 from fastapi import HTTPException, Request
+from jwt import PyJWKClient, PyJWKClientError
 from .config import settings
 from .database import get_conn
 
 logger = logging.getLogger(__name__)
+
+
+@lru_cache(maxsize=1)
+def _jwks_client(supabase_url: str) -> PyJWKClient:
+    return PyJWKClient(
+        f"{supabase_url}/auth/v1/.well-known/jwks.json",
+        cache_jwk_set=True,
+        lifespan=3600,
+    )
 
 
 def _decode_jwt(request: Request) -> dict:
@@ -13,6 +24,35 @@ def _decode_jwt(request: Request) -> dict:
     if not auth_header.startswith("Bearer "):
         raise HTTPException(status_code=401, detail="Missing auth token")
     token = auth_header[7:]
+
+    # Primary path: asymmetric verification via Supabase JWKS (ES256 / RS256)
+    # Required when Supabase uses ECC P-256 or RSA signing keys.
+    if settings.supabase_url:
+        client = _jwks_client(settings.supabase_url)
+        try:
+            signing_key = client.get_signing_key_from_jwt(token)
+            try:
+                return jwt.decode(
+                    token,
+                    signing_key.key,
+                    algorithms=["ES256", "RS256"],
+                    audience="authenticated",
+                )
+            except jwt.ExpiredSignatureError:
+                raise HTTPException(status_code=401, detail="Token expired")
+            except jwt.InvalidTokenError as e:
+                logger.warning("Asymmetric JWT decode failed (%s): %s", type(e).__name__, e)
+                raise HTTPException(status_code=401, detail="Invalid token")
+        except PyJWKClientError:
+            # Token's kid not in JWKS — fall through to HS256 for legacy tokens
+            pass
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning("JWKS fetch error: %s", e)
+            # Fall through to HS256 if JWKS endpoint is unreachable
+
+    # Fallback: symmetric HS256 (legacy Supabase shared secret)
     if not settings.supabase_jwt_secret:
         raise HTTPException(status_code=500, detail="Auth not configured on server")
     try:
@@ -25,7 +65,7 @@ def _decode_jwt(request: Request) -> dict:
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
     except jwt.InvalidTokenError as e:
-        logger.warning("JWT decode failed (%s): %s", type(e).__name__, str(e))
+        logger.warning("HS256 JWT decode failed (%s): %s", type(e).__name__, e)
         raise HTTPException(status_code=401, detail="Invalid token")
 
 
