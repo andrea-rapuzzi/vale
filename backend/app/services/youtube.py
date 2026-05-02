@@ -59,19 +59,26 @@ def _refresh_cookies_if_needed() -> Optional[Path]:
 
 
 def _make_session() -> Optional[requests.Session]:
-    """Build a requests.Session with browser cookies loaded, or None."""
+    """Build a requests.Session with browser cookies and/or proxy configured, or None."""
+    proxy = settings.yt_proxy.strip() if settings.yt_proxy else None
     cookies_path = _refresh_cookies_if_needed()
-    if cookies_path is None:
-        return None
 
-    cj = http.cookiejar.MozillaCookieJar(str(cookies_path))
-    try:
-        cj.load(ignore_discard=True, ignore_expires=True)
-    except Exception:
+    if cookies_path is None and not proxy:
         return None
 
     session = requests.Session()
-    session.cookies.update(cj)
+
+    if cookies_path:
+        cj = http.cookiejar.MozillaCookieJar(str(cookies_path))
+        try:
+            cj.load(ignore_discard=True, ignore_expires=True)
+            session.cookies.update(cj)
+        except Exception:
+            pass
+
+    if proxy:
+        session.proxies = {"http": proxy, "https": proxy}
+
     return session
 
 
@@ -86,6 +93,12 @@ def _yt_dlp_cookies_args() -> list[str]:
     return []
 
 
+def _yt_dlp_proxy_args() -> list[str]:
+    """Return yt-dlp --proxy argument if YT_PROXY is configured."""
+    proxy = settings.yt_proxy.strip() if settings.yt_proxy else None
+    return ["--proxy", proxy] if proxy else []
+
+
 def fetch_channel_videos(url: str) -> tuple[str, list[dict]]:
     """Return (channel_name, list of video metadata dicts) for all videos in channel."""
     _refresh_cookies_if_needed()
@@ -96,6 +109,7 @@ def fetch_channel_videos(url: str) -> tuple[str, list[dict]]:
         "--no-warnings",
         "--playlist-end", "100",
         *_yt_dlp_cookies_args(),
+        *_yt_dlp_proxy_args(),
         url,
     ]
     try:
@@ -227,6 +241,7 @@ def _fetch_via_ytdlp(youtube_id: str) -> tuple[Optional[list[dict]], Optional[st
             cmd = [
                 "yt-dlp",
                 *cookies_args,
+                *_yt_dlp_proxy_args(),
                 "--write-auto-sub",
                 "--write-sub",
                 "--sub-lang", lang,

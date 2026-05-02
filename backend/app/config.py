@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     cookies_browser: str = ""  # browser to export cookies from: chrome, firefox, etc.
     cookies_max_age_hours: int = 12  # refresh cookie file after this many hours
     cookies_dir: str = "./data"  # local directory for the cached cookies.txt file
+    yt_proxy: str = ""  # HTTP/HTTPS proxy for YouTube requests, e.g. http://user:pass@host:port
 
     @field_validator("supabase_jwt_secret", "supabase_url", "anthropic_api_key", "database_url", mode="before")
     @classmethod
