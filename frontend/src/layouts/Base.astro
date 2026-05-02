@@ -9,11 +9,11 @@ const userEmail = Astro.locals.userEmail ?? ''
 <html lang="en" class="bg-gray-950 text-gray-100 min-h-screen">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>{title} — VALE</title>
     <script define:vars={{ accessToken }}>window.__authToken = accessToken</script>
   </head>
-  <body class="min-h-screen flex flex-col">
+  <body class="min-h-screen flex flex-col pb-[env(safe-area-inset-bottom)]">
     <header class="border-b border-gray-800 px-6 py-4 flex items-center gap-6">
       <a href="/" class="text-lg font-bold tracking-tight text-white hover:text-indigo-400 transition-colors">
         VALE

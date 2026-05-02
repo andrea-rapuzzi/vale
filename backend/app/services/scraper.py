@@ -36,6 +36,7 @@ async def run_scrape_job(job_id: str, video_ids: list[int]) -> None:
     errors = []
     completed = 0
     fatal: Exception | None = None
+    _yt_calls = 0  # count actual YouTube fetches to space them out
 
     for vid_id in video_ids:
         title = None
@@ -68,6 +69,9 @@ async def run_scrape_job(job_id: str, video_ids: list[int]) -> None:
                 update_job(job_id, completed=completed)
                 continue
 
+            if _yt_calls > 0:
+                await asyncio.sleep(1.5)
+            _yt_calls += 1
             cues, reason = await asyncio.to_thread(fetch_transcript, youtube_id)
 
             if cues is None:
