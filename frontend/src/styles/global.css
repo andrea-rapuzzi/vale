@@ -1,1 +1,38 @@
 @import "tailwindcss";
+
+/*
+  Unlayered CSS has higher cascade priority than Tailwind's @layer utilities,
+  so these rules cleanly override the default ease-in-out timing on interactive elements.
+*/
+
+/* Strong ease-out: starts fast, feels more responsive than Tailwind's default ease-in-out */
+a {
+  transition-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+/* Buttons: include transform so press feedback animates alongside color */
+button,
+[type="submit"],
+[role="button"] {
+  transition-property: transform, color, background-color, border-color,
+    text-decoration-color, fill, stroke, opacity;
+  transition-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
+  transition-duration: 150ms;
+}
+
+/* Press feedback — confirms every click before the action fires */
+button:active,
+[type="submit"]:active,
+[role="button"]:active {
+  transform: scale(0.97);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -9,6 +9,11 @@ export const onRequest: MiddlewareHandler = async (context, next) => {
     return next()
   }
 
+  // Guard: if Supabase is not configured, treat as unauthenticated
+  if (!import.meta.env.PUBLIC_SUPABASE_URL || !import.meta.env.PUBLIC_SUPABASE_ANON_KEY) {
+    return context.redirect('/login')
+  }
+
   const supabase = createServerClient(
     import.meta.env.PUBLIC_SUPABASE_URL,
     import.meta.env.PUBLIC_SUPABASE_ANON_KEY,
