@@ -19,9 +19,12 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="YTS — YouTube Transcript Search", lifespan=lifespan)
 
+_allowed_origins = [settings.frontend_url, "http://localhost:4321", "http://localhost:4322"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_url, "http://localhost:4321", "http://localhost:4322"],
+    allow_origins=_allowed_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_methods=["GET", "POST", "DELETE"],
     allow_headers=["*"],
 )

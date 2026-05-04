@@ -70,6 +70,14 @@ const scrapedCount = videos.filter((v: any) => v.scraped).length;
     >
       Scrape Selected
     </button>
+    <button
+      id="compare-btn"
+      disabled
+      class="px-5 py-2.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+      title="Compare transcripts of 2–3 already-scraped videos"
+    >
+      Compare
+    </button>
   </div>
 
   <p id="sel-error" class="text-sm text-red-400 hidden"></p>
@@ -78,8 +86,16 @@ const scrapedCount = videos.filter((v: any) => v.scraped).length;
 <script define:vars={{ apiBase, scrapedCount }}>
   const checkboxes = document.querySelectorAll('.video-cb');
   const scrapeBtn = document.getElementById('scrape-btn');
+  const compareBtn = document.getElementById('compare-btn');
   const countEl = document.getElementById('sel-count');
   const errEl = document.getElementById('sel-error');
+
+  // Map video id → scraped status for compare eligibility
+  const scrapedMap = {};
+  document.querySelectorAll('input.video-cb').forEach(cb => {
+    const label = cb.closest('label');
+    scrapedMap[cb.value] = label?.dataset.scraped === 'true';
+  });
 
   function getSelected() {
     return Array.from(checkboxes).filter(cb => cb.checked).map(cb => Number(cb.value));
@@ -95,6 +111,10 @@ const scrapedCount = videos.filter((v: any) => v.scraped).length;
     checkboxes.forEach(cb => {
       if (!cb.checked) cb.disabled = count >= 10;
     });
+
+    // Compare button: enabled when 2–3 scraped videos are selected
+    const allScraped = sel.length >= 2 && sel.length <= 3 && sel.every(id => scrapedMap[id]);
+    compareBtn.disabled = !allScraped;
   }
 
   checkboxes.forEach(cb => cb.addEventListener('change', update));
@@ -114,6 +134,13 @@ const scrapedCount = videos.filter((v: any) => v.scraped).length;
       toggleBtn.classList.toggle('bg-green-900/40', scrapedOnly);
     });
   }
+
+  compareBtn.addEventListener('click', () => {
+    const ids = getSelected();
+    if (ids.length < 2) return;
+    const params = ids.map(id => `v=${id}`).join('&');
+    window.location.href = `/compare?${params}&mode=classic`;
+  });
 
   scrapeBtn.addEventListener('click', async () => {
     const ids = getSelected();

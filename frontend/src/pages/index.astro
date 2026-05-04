@@ -1,6 +1,7 @@
 ---
 import Base from '../layouts/Base.astro';
 import ChannelForm from '../components/ChannelForm.astro';
+import VideoForm from '../components/VideoForm.astro';
 
 const apiBase = import.meta.env.BACKEND_URL ?? 'http://localhost:8000';
 let recentChannels: any[] = [];
@@ -12,7 +13,7 @@ try {
   }
 } catch {}
 ---
-<Base title="Home">
+<Base title="Home" description="Add YouTube channels, scrape transcripts, and run AI-powered semantic searches to find the exact moments that match your intent." canonicalPath="/">
   <div class="max-w-2xl mx-auto space-y-10">
     <div class="text-center space-y-2 pt-6">
       <h1 class="text-3xl font-bold text-white">Video Analysis & Listening Engine</h1>
@@ -20,6 +21,8 @@ try {
     </div>
 
     <ChannelForm />
+
+    <VideoForm />
 
     {recentChannels.length > 0 && (
       <div>
