@@ -62,7 +62,8 @@ function fmtTime(s: number) {
     </div>
 
     <!-- Shared sticky filter bar -->
-    <div class="sticky top-0 z-20 bg-gray-950 py-3 border-b border-gray-800">
+    <div class="sticky top-0 z-20 bg-gray-950 py-3 border-b border-gray-800 space-y-2">
+      <!-- Chunk filter row -->
       <div class="flex items-center gap-3">
         <div class="relative flex-1">
           <input
@@ -80,6 +81,32 @@ function fmtTime(s: number) {
           >×</button>
         </div>
         <span id="filter-summary" class="shrink-0 text-xs text-gray-500 w-24 text-right"></span>
+      </div>
+
+      <!-- Ask all videos row -->
+      <div>
+        <div class="flex items-center gap-3">
+          <div id="ask-all-form" class="hidden flex-1 flex gap-2">
+            <input
+              id="ask-all-input"
+              type="text"
+              placeholder="Ask a question across all videos…"
+              autocomplete="off"
+              class="flex-1 px-4 py-2.5 rounded-lg bg-gray-900 border border-indigo-700 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+            />
+            <button
+              id="ask-all-submit"
+              disabled
+              class="shrink-0 px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >Ask all</button>
+          </div>
+          <button
+            id="ask-all-toggle"
+            class="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg bg-indigo-900/40 hover:bg-indigo-900/70 border border-indigo-700/50 text-indigo-300 text-xs font-medium transition-colors"
+          >
+            <span>✨</span><span id="ask-all-toggle-label">Ask all videos</span>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -233,6 +260,46 @@ function fmtTime(s: number) {
 
   filterInput.addEventListener('input', runFilter);
   filterClear.addEventListener('click', () => { filterInput.value = ''; runFilter(); filterInput.focus(); });
+
+  // ── Ask all videos ────────────────────────────────────────────────────────────
+  const askAllToggle = document.getElementById('ask-all-toggle');
+  const askAllForm = document.getElementById('ask-all-form');
+  const askAllInput = document.getElementById('ask-all-input');
+  const askAllSubmit = document.getElementById('ask-all-submit');
+  const askAllLabel = document.getElementById('ask-all-toggle-label');
+
+  askAllToggle.addEventListener('click', () => {
+    const open = !askAllForm.classList.contains('hidden');
+    askAllForm.classList.toggle('hidden', open);
+    askAllLabel.textContent = open ? 'Ask all videos' : 'Hide';
+    if (!open) askAllInput.focus();
+  });
+
+  askAllInput.addEventListener('input', () => {
+    askAllSubmit.disabled = askAllInput.value.trim().length === 0;
+  });
+
+  askAllInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !askAllSubmit.disabled) askAllSubmit.click();
+  });
+
+  askAllSubmit.addEventListener('click', () => {
+    const question = askAllInput.value.trim();
+    if (!question) return;
+    document.querySelectorAll('.video-column').forEach(col => {
+      const form = col.querySelector('.ai-form');
+      const toggleBtn = col.querySelector('.ai-toggle');
+      const aiInput = col.querySelector('.ai-input');
+      const submitBtn = col.querySelector('.ai-submit');
+      if (form.classList.contains('hidden')) {
+        form.classList.remove('hidden');
+        toggleBtn.textContent = 'Hide';
+      }
+      aiInput.value = question;
+      aiInput.dispatchEvent(new Event('input'));
+      submitBtn.click();
+    });
+  });
 
   // ── Per-column AI Search ──────────────────────────────────────────────────────
   function fmtTime(s) {
