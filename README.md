@@ -1,6 +1,6 @@
-# YTS — YouTube Transcript Search
+# VALE — the Video Analysis & Listening Engine
 
-A full-stack web application that scrapes YouTube channel transcripts and lets you run AI-powered semantic searches across them using Claude.
+Side project that aims to provide users a tool that helps them scraping YouTube channel transcripts and run AI-powered semantic searches across them using Claude.
 
 ## Features
 
