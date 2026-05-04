@@ -154,6 +154,36 @@ def fetch_channel_videos(url: str) -> tuple[str, list[dict]]:
     return channel_name, videos
 
 
+def fetch_video_info(url: str) -> dict:
+    """Fetch metadata for a single video URL. Returns {youtube_id, title, duration_sec, upload_date}."""
+    _refresh_cookies_if_needed()
+    cmd = [
+        "yt-dlp",
+        "--dump-single-json",
+        "--no-playlist",
+        "--no-warnings",
+        *_yt_dlp_cookies_args(),
+        *_yt_dlp_proxy_args(),
+        url,
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+    except FileNotFoundError:
+        raise RuntimeError(
+            "yt-dlp is not installed or not found in PATH. "
+            "Install it with: pip install yt-dlp"
+        )
+    if result.returncode != 0:
+        raise RuntimeError(f"yt-dlp failed: {result.stderr[:500]}")
+    data = json.loads(result.stdout)
+    return {
+        "youtube_id": data["id"],
+        "title": data.get("title") or "Untitled",
+        "duration_sec": data.get("duration"),
+        "upload_date": data.get("upload_date"),
+    }
+
+
 PREFERRED_LANGS = ["it", "en", "it-orig", "en-orig"]
 
 

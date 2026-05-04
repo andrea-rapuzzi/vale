@@ -1,0 +1,352 @@
+---
+import Base from '../layouts/Base.astro';
+
+const apiBase = import.meta.env.BACKEND_URL ?? 'http://localhost:8000';
+const publicApiBase = import.meta.env.PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
+
+// Parse video IDs from query params (up to 3)
+const rawIds = Astro.url.searchParams.getAll('v').slice(0, 3);
+const videoIds = rawIds.map(Number).filter(id => id > 0);
+const initialMode = Astro.url.searchParams.get('mode') === 'ai' ? 'ai' : 'classic';
+
+if (videoIds.length < 2) {
+  return Astro.redirect('/library');
+}
+
+// Fetch metadata for each video server-side
+type VideoMeta = {
+  id: number;
+  youtube_id: string;
+  title: string;
+  chunk_count: number;
+  duration_sec: number | null;
+};
+
+const videoMetas: VideoMeta[] = [];
+for (const id of videoIds) {
+  try {
+    const res = await fetch(`${apiBase}/api/video/${id}/transcript`);
+    if (res.ok) {
+      const data = await res.json();
+      videoMetas.push({
+        id,
+        youtube_id: data.youtube_id,
+        title: data.title,
+        chunk_count: data.chunks?.length ?? 0,
+        duration_sec: data.duration_sec ?? null,
+      });
+    }
+  } catch {}
+}
+
+if (videoMetas.length < 2) {
+  return Astro.redirect('/library');
+}
+
+function fmtTime(s: number) {
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = Math.floor(s % 60);
+  if (h) return `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+  return `${m}:${String(sec).padStart(2,'0')}`;
+}
+---
+<Base title="Compare Videos">
+  <div class="space-y-6">
+    <div class="flex items-center gap-4">
+      <a href="/library" class="text-sm text-gray-500 hover:text-gray-300 transition-colors">← Library</a>
+      <h1 class="text-xl font-bold text-white">Compare Videos</h1>
+    </div>
+
+    <!-- Shared search bar -->
+    <div class="bg-gray-900 rounded-xl p-5 space-y-4 border border-gray-800">
+      <!-- Mode toggle -->
+      <div class="flex gap-2">
+        <button
+          id="mode-classic"
+          class={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${initialMode === 'classic' ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
+        >
+          Classic Search
+        </button>
+        <button
+          id="mode-ai"
+          class={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${initialMode === 'ai' ? 'bg-violet-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`}
+        >
+          AI Search
+        </button>
+      </div>
+
+      <!-- Input -->
+      <div class="flex gap-3">
+        <input
+          id="search-input"
+          type="text"
+          placeholder={initialMode === 'ai' ? 'Ask a question about these videos…' : 'Describe what you want to find…'}
+          class="flex-1 px-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+        />
+        <button
+          id="search-btn"
+          class="px-6 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          Search
+        </button>
+      </div>
+
+      <p id="search-status" class="text-sm text-gray-400 hidden"></p>
+      <p id="search-error" class="text-sm text-red-400 hidden"></p>
+    </div>
+
+    <!-- Video columns -->
+    <div
+      class={`grid gap-4 ${videoMetas.length === 3 ? 'grid-cols-1 lg:grid-cols-3' : videoMetas.length === 2 ? 'grid-cols-1 md:grid-cols-2' : 'grid-cols-1'}`}
+    >
+      {videoMetas.map((v) => (
+        <div class="space-y-3" data-video-id={v.id} data-youtube-id={v.youtube_id}>
+          <!-- Video header -->
+          <div class="bg-gray-900 rounded-xl p-4 border border-gray-800">
+            <a
+              href={`/video/${v.id}`}
+              class="block text-sm font-semibold text-white hover:text-indigo-300 transition-colors leading-snug"
+            >
+              {v.title}
+            </a>
+            <p class="text-xs text-gray-500 mt-1">
+              {v.chunk_count} chunks
+              {v.duration_sec && <> · {fmtTime(v.duration_sec)}</>}
+            </p>
+          </div>
+
+          <!-- Results area -->
+          <div class="column-results space-y-2" data-video-id={v.id}>
+            <p class="column-empty text-xs text-gray-600 text-center py-4">Run a search to see results here.</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  </div>
+</Base>
+
+<script define:vars={{ publicApiBase, videoMetas, initialMode }}>
+  // ── State ────────────────────────────────────────────────────────────────────
+  let currentMode = initialMode;
+  const videoIds = videoMetas.map(v => v.id);
+  const ytIdMap = Object.fromEntries(videoMetas.map(v => [v.youtube_id, v.id]));
+
+  // ── Elements ─────────────────────────────────────────────────────────────────
+  const classicBtn = document.getElementById('mode-classic');
+  const aiBtn = document.getElementById('mode-ai');
+  const searchInput = document.getElementById('search-input');
+  const searchBtn = document.getElementById('search-btn');
+  const statusEl = document.getElementById('search-status');
+  const errorEl = document.getElementById('search-error');
+
+  // ── Mode switch ───────────────────────────────────────────────────────────────
+  function setMode(mode) {
+    currentMode = mode;
+    const isClassic = mode === 'classic';
+    classicBtn.className = `px-4 py-2 rounded-lg text-sm font-medium transition-colors ${isClassic ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`;
+    aiBtn.className = `px-4 py-2 rounded-lg text-sm font-medium transition-colors ${!isClassic ? 'bg-violet-600 text-white' : 'bg-gray-800 text-gray-400 hover:text-white'}`;
+    searchInput.placeholder = isClassic ? 'Describe what you want to find…' : 'Ask a question about these videos…';
+    searchBtn.className = `px-6 py-2.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${isClassic ? 'bg-indigo-600 hover:bg-indigo-500' : 'bg-violet-600 hover:bg-violet-500'} text-white`;
+  }
+
+  classicBtn.addEventListener('click', () => setMode('classic'));
+  aiBtn.addEventListener('click', () => setMode('ai'));
+
+  // ── Helpers ───────────────────────────────────────────────────────────────────
+  function showStatus(msg) {
+    statusEl.textContent = msg;
+    statusEl.classList.remove('hidden');
+    errorEl.classList.add('hidden');
+  }
+
+  function showError(msg) {
+    errorEl.textContent = msg;
+    errorEl.classList.remove('hidden');
+    statusEl.classList.add('hidden');
+  }
+
+  function clearStatus() {
+    statusEl.classList.add('hidden');
+    errorEl.classList.add('hidden');
+  }
+
+  function getResultsEl(videoId) {
+    return document.querySelector(`.column-results[data-video-id="${videoId}"]`);
+  }
+
+  function clearColumns() {
+    videoIds.forEach(id => {
+      const el = getResultsEl(id);
+      if (el) el.innerHTML = '<p class="column-empty text-xs text-gray-600 text-center py-4">Searching…</p>';
+    });
+  }
+
+  function fmtTime(s) {
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = Math.floor(s % 60);
+    if (h) return `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
+    return `${m}:${String(sec).padStart(2,'0')}`;
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  // ── Classic search ────────────────────────────────────────────────────────────
+  async function runClassicSearch(intent) {
+    const token = await window.__getAuthToken();
+    showStatus('Starting search…');
+
+    const res = await fetch(`${publicApiBase}/api/query`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      body: JSON.stringify({ intent, video_ids: videoIds }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail ?? 'Failed to start query');
+
+    const { query_id, job_id } = data;
+
+    // Poll until done
+    for (let i = 0; i < 300; i++) {
+      await new Promise(r => setTimeout(r, i < 20 ? 1500 : 3000));
+      const statusRes = await fetch(`${publicApiBase}/api/query/status/${job_id}`);
+      const statusData = await statusRes.json();
+      showStatus(`Evaluating chunks… (${statusData.completed ?? 0}/${statusData.total ?? '?'})`);
+      if (statusData.status === 'done') break;
+      if (statusData.status === 'failed') throw new Error('Query job failed');
+    }
+
+    // Fetch results
+    const resultsRes = await fetch(`${publicApiBase}/api/query/${query_id}/results?limit=200`, {
+      headers: { 'Authorization': `Bearer ${await window.__getAuthToken()}` },
+    });
+    const resultsData = await resultsRes.json();
+    const results = resultsData.results ?? [];
+
+    // Group by youtube_id → video DB id
+    const grouped = {};
+    videoIds.forEach(id => { grouped[id] = []; });
+    results.forEach(r => {
+      const vid = videoMetas.find(v => v.youtube_id === r.youtube_id);
+      if (vid) grouped[vid.id].push(r);
+    });
+
+    // Render per column
+    videoIds.forEach(id => {
+      const el = getResultsEl(id);
+      if (!el) return;
+      const colResults = grouped[id];
+      if (!colResults.length) {
+        el.innerHTML = '<p class="text-xs text-gray-600 text-center py-4">No relevant results found.</p>';
+        return;
+      }
+      el.innerHTML = colResults.map(r => `
+        <div class="bg-gray-900 rounded-xl p-4 space-y-2 border border-gray-800">
+          <p class="text-sm text-gray-300">${escHtml(r.reasoning)}</p>
+          <p class="text-xs text-gray-500 leading-relaxed">${escHtml((r.chunk_text ?? '').slice(0, 240))}${r.chunk_text?.length > 240 ? '…' : ''}</p>
+          ${r.topic ? `<span class="inline-block px-2 py-0.5 rounded-full text-xs bg-indigo-900/60 text-indigo-200 border border-indigo-800">${escHtml(r.topic)}</span>` : ''}
+          <a href="${escHtml(r.youtube_url)}" target="_blank" rel="noopener noreferrer"
+             class="block text-xs text-indigo-400 hover:text-indigo-300 font-medium">
+            ▶ Watch at ${fmtTime(r.start_sec)} → ${fmtTime(r.end_sec)}
+          </a>
+        </div>
+      `).join('');
+    });
+
+    clearStatus();
+  }
+
+  // ── AI search ─────────────────────────────────────────────────────────────────
+  async function runAiSearch(question) {
+    const token = await window.__getAuthToken();
+    showStatus('Analyzing transcripts in parallel…');
+
+    // Set loading state per column
+    videoIds.forEach(id => {
+      const el = getResultsEl(id);
+      if (el) el.innerHTML = '<p class="text-xs text-gray-500 text-center py-4 animate-pulse">Analyzing…</p>';
+    });
+
+    // Fire all requests in parallel, resolve individually
+    const requests = videoMetas.map(v =>
+      fetch(`${publicApiBase}/api/video/${v.id}/ai-search`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify({ question }),
+      })
+        .then(r => r.json().then(data => ({ ok: r.ok, data, v })))
+        .catch(err => ({ ok: false, data: { detail: err.message }, v }))
+    );
+
+    // Render each column as its request resolves
+    await Promise.allSettled(requests.map(p =>
+      p.then(({ ok, data, v }) => {
+        const el = getResultsEl(v.id);
+        if (!el) return;
+        if (!ok) {
+          el.innerHTML = `<p class="text-xs text-red-400 text-center py-4">${escHtml(data.detail ?? 'Error')}</p>`;
+          return;
+        }
+        const significantChunks = data.chunks ?? [];
+        el.innerHTML = `
+          <div class="bg-gray-900 rounded-xl p-4 border border-gray-800 space-y-3">
+            <p class="text-sm font-medium text-white">Answer</p>
+            <p class="text-sm text-gray-300 leading-relaxed">${escHtml(data.answer ?? '')}</p>
+          </div>
+          ${significantChunks.length > 0 ? `
+            <div class="space-y-2">
+              <p class="text-xs text-gray-500 font-medium uppercase tracking-wider">Significant chunks</p>
+              ${significantChunks.map(c => `
+                <div class="bg-gray-900 rounded-lg p-3 border border-gray-800 space-y-1.5">
+                  <p class="text-xs text-gray-400">${escHtml(c.reason ?? '')}</p>
+                  <p class="text-xs text-gray-500 leading-relaxed">${escHtml((c.text ?? '').slice(0, 200))}${(c.text?.length ?? 0) > 200 ? '…' : ''}</p>
+                  <a href="https://www.youtube.com/watch?v=${encodeURIComponent(v.youtube_id)}&t=${Math.floor(c.start_sec ?? 0)}"
+                     target="_blank" rel="noopener noreferrer"
+                     class="block text-xs text-indigo-400 hover:text-indigo-300 font-medium">
+                    ▶ ${fmtTime(c.start_sec ?? 0)}
+                  </a>
+                </div>
+              `).join('')}
+            </div>
+          ` : ''}
+        `;
+      })
+    ));
+
+    clearStatus();
+  }
+
+  // ── Search trigger ────────────────────────────────────────────────────────────
+  searchBtn.addEventListener('click', async () => {
+    const q = searchInput.value.trim();
+    if (!q) return;
+    clearStatus();
+    clearColumns();
+    searchBtn.disabled = true;
+    try {
+      if (currentMode === 'classic') {
+        await runClassicSearch(q);
+      } else {
+        await runAiSearch(q);
+      }
+    } catch (e) {
+      showError(e.message);
+      videoIds.forEach(id => {
+        const el = getResultsEl(id);
+        if (el) el.innerHTML = '<p class="text-xs text-gray-600 text-center py-4">Search failed.</p>';
+      });
+    } finally {
+      searchBtn.disabled = false;
+    }
+  });
+
+  searchInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') searchBtn.click();
+  });
+
+  // Apply initial mode styling
+  setMode(initialMode);
+</script>

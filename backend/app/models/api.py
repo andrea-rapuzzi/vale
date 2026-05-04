@@ -6,6 +6,17 @@ class ChannelFetchRequest(BaseModel):
     url: str
 
 
+class VideoUrlRequest(BaseModel):
+    url: str
+
+    @field_validator("url")
+    @classmethod
+    def non_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("URL cannot be empty")
+        return v.strip()
+
+
 class ScrapeRequest(BaseModel):
     video_ids: list[int]
 

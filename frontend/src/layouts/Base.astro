@@ -1,16 +1,33 @@
 ---
 import '../styles/global.css';
-interface Props { title?: string }
-const { title = 'VALE' } = Astro.props;
+interface Props {
+  title?: string;
+  description?: string;
+  canonicalPath?: string;
+}
+const { title = 'VALE', description = 'VALE — search across YouTube video transcripts with AI-powered semantic analysis.', canonicalPath } = Astro.props;
 const accessToken = Astro.locals.accessToken ?? ''
 const userEmail = Astro.locals.userEmail ?? ''
+const siteUrl = import.meta.env.PUBLIC_SITE_URL ?? 'https://vale.app';
+const pageTitle = title === 'VALE' ? 'VALE' : `${title} — VALE`;
+const canonicalUrl = canonicalPath ? `${siteUrl}${canonicalPath}` : null;
 ---
 <!doctype html>
 <html lang="en" class="bg-gray-950 text-gray-100 min-h-screen">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>{title} — VALE</title>
+    <title>{pageTitle}</title>
+    <meta name="description" content={description} />
+    {canonicalUrl && <link rel="canonical" href={canonicalUrl} />}
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="VALE" />
+    {canonicalUrl && <meta property="og:url" content={canonicalUrl} />}
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content={pageTitle} />
+    <meta name="twitter:description" content={description} />
     <script define:vars={{ accessToken }}>window.__authToken = accessToken</script>
   </head>
   <body class="min-h-screen flex flex-col pb-[env(safe-area-inset-bottom)]">

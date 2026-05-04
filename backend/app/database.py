@@ -98,6 +98,13 @@ def _get_pool() -> ConnectionPool:
 def init_db() -> None:
     with _get_pool().connection() as conn:
         conn.execute(DDL)
+        conn.execute(
+            """
+            INSERT INTO channels (url, name, fetched_at)
+            VALUES ('__standalone__', 'Standalone Videos', now()::text)
+            ON CONFLICT (url) DO NOTHING
+            """
+        )
 
 
 @contextmanager
