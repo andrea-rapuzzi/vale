@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>YTS – Infrastructure Diagram</title>
+  <script
+    src="https://cdn.jsdelivr.net/npm/mermaid@11.4.1/dist/mermaid.min.js"
+    integrity="sha384-rbtjAdnIQE/aQJGEgXrVUlMibdfTSa4PQju4HDhN3sR2PmaKFzhEafuePsl9H/9I"
+    crossorigin="anonymous"
+  ></script>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --border: #2e3148;
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --accent-blue: #3b82f6;
+      --accent-purple: #8b5cf6;
+      --accent-green: #10b981;
+      --accent-orange: #f59e0b;
+      --accent-red: #ef4444;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      min-height: 100vh;
+      padding: 40px 24px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 48px;
+    }
+
+    header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    header p {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .diagram-container {
+      max-width: 1100px;
+      margin: 0 auto;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 40px;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    .legend {
+      max-width: 1100px;
+      margin: 32px auto 0;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 12px;
+    }
+
+    .legend-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 16px;
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .legend-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-top: 4px;
+      flex-shrink: 0;
+    }
+
+    .legend-item h4 {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .legend-item p {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 2px;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>YTS — Infrastructure Diagram</h1>
+  <p>YouTube Transcript Search · Full-stack architecture overview</p>
+</header>
+
+<div class="diagram-container">
+  <div class="mermaid">
+graph TB
+    subgraph CLIENT["🌐 Client"]
+        BROWSER["Browser"]
+    end
+
+    subgraph VERCEL["☁️ Vercel — Frontend"]
+        ASTRO["Astro SSR\n(output: server)\nNode 22.x\nPort 4321 / dev"]
+        MW["middleware.ts\nAuth guard"]
+        PAGES["Pages\nindex · login · register\nlibrary · channels\nquery · video · chunks"]
+    end
+
+    subgraph RAILWAY["🚂 Railway — Backend"]
+        FASTAPI["FastAPI\nUvicorn\nPython 3.11\nPort $PORT"]
+        AUTH_M["auth.py\nJWT verify\n(JWKS ES256 / HS256)"]
+        ROUTERS["Routers\n/api/channels\n/api/videos\n/api/scrape\n/api/query"]
+        SERVICES["Services\nai_search · scraper\nevaluator · youtube\nvtt_parser · reporter"]
+        JOBS["jobs.py\nBackground job tracker"]
+    end
+
+    subgraph SUPABASE["🔷 Supabase"]
+        SB_AUTH["Auth\nJWT Provider\nJWKS endpoint"]
+        SB_DB[("PostgreSQL\nconnection pooler :6543")]
+        TABLES["Tables\nchannels · videos · chunks\nqueries · results · jobs\nuser_profiles · usage_logs"]
+    end
+
+    subgraph EXTERNAL["🔌 External APIs"]
+        ANTHROPIC["Anthropic\nClaude API\nai_search · evaluator"]
+        YOUTUBE["YouTube\nyt-dlp\nyoutube-transcript-api"]
+    end
+
+    BROWSER -->|"HTTPS"| ASTRO
+    ASTRO --> MW
+    MW --> PAGES
+    BROWSER -->|"Login / Register"| SB_AUTH
+    SB_AUTH -->|"JWT token"| BROWSER
+
+    ASTRO -->|"fetch /api/*\n+ Bearer JWT\nPUBLIC_BACKEND_URL"| FASTAPI
+    FASTAPI --> AUTH_M
+    AUTH_M -->|"JWKS lookup"| SB_AUTH
+    FASTAPI --> ROUTERS
+    ROUTERS --> SERVICES
+    ROUTERS --> JOBS
+
+    SERVICES -->|"DB queries\nDATABASE_URL"| SB_DB
+    SB_DB --- TABLES
+
+    SERVICES -->|"ANTHROPIC_API_KEY"| ANTHROPIC
+    SERVICES -->|"Transcript download\ncookies bypass"| YOUTUBE
+
+    style CLIENT fill:#1e293b,stroke:#3b82f6,color:#e2e8f0
+    style VERCEL fill:#1e293b,stroke:#8b5cf6,color:#e2e8f0
+    style RAILWAY fill:#1e293b,stroke:#f59e0b,color:#e2e8f0
+    style SUPABASE fill:#1e293b,stroke:#10b981,color:#e2e8f0
+    style EXTERNAL fill:#1e293b,stroke:#ef4444,color:#e2e8f0
+
+    style BROWSER fill:#2d3748,stroke:#3b82f6,color:#e2e8f0
+    style ASTRO fill:#312e81,stroke:#8b5cf6,color:#e2e8f0
+    style MW fill:#312e81,stroke:#8b5cf6,color:#e2e8f0
+    style PAGES fill:#312e81,stroke:#8b5cf6,color:#e2e8f0
+    style FASTAPI fill:#78350f,stroke:#f59e0b,color:#e2e8f0
+    style AUTH_M fill:#78350f,stroke:#f59e0b,color:#e2e8f0
+    style ROUTERS fill:#78350f,stroke:#f59e0b,color:#e2e8f0
+    style SERVICES fill:#78350f,stroke:#f59e0b,color:#e2e8f0
+    style JOBS fill:#78350f,stroke:#f59e0b,color:#e2e8f0
+    style SB_AUTH fill:#064e3b,stroke:#10b981,color:#e2e8f0
+    style SB_DB fill:#064e3b,stroke:#10b981,color:#e2e8f0
+    style TABLES fill:#064e3b,stroke:#10b981,color:#e2e8f0
+    style ANTHROPIC fill:#7f1d1d,stroke:#ef4444,color:#e2e8f0
+    style YOUTUBE fill:#7f1d1d,stroke:#ef4444,color:#e2e8f0
+  </div>
+</div>
+
+<div class="legend">
+  <div class="legend-item">
+    <div class="legend-dot" style="background:#3b82f6"></div>
+    <div>
+      <h4>Client</h4>
+      <p>Browser dell'utente, accede via HTTPS.</p>
+    </div>
+  </div>
+  <div class="legend-item">
+    <div class="legend-dot" style="background:#8b5cf6"></div>
+    <div>
+      <h4>Vercel — Frontend</h4>
+      <p>Astro SSR con TailwindCSS, middleware di autenticazione, adapter Vercel.</p>
+    </div>
+  </div>
+  <div class="legend-item">
+    <div class="legend-dot" style="background:#f59e0b"></div>
+    <div>
+      <h4>Railway — Backend</h4>
+      <p>FastAPI + Uvicorn su Python 3.11, containerizzato via Docker, esposto su $PORT.</p>
+    </div>
+  </div>
+  <div class="legend-item">
+    <div class="legend-dot" style="background:#10b981"></div>
+    <div>
+      <h4>Supabase</h4>
+      <p>Auth (JWKS JWT), PostgreSQL con pooler su :6543, 8 tabelle applicative.</p>
+    </div>
+  </div>
+  <div class="legend-item">
+    <div class="legend-dot" style="background:#ef4444"></div>
+    <div>
+      <h4>External APIs</h4>
+      <p>Anthropic Claude per AI search/evaluation, YouTube tramite yt-dlp per i transcript.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    securityLevel: 'strict',
+    theme: 'dark',
+    themeVariables: {
+      darkMode: true,
+      background: '#0f1117',
+      primaryColor: '#1e293b',
+      primaryTextColor: '#e2e8f0',
+      primaryBorderColor: '#3b82f6',
+      lineColor: '#64748b',
+      secondaryColor: '#1a1d27',
+      tertiaryColor: '#1a1d27',
+      edgeLabelBackground: '#1a1d27',
+      fontSize: '13px',
+      fontFamily: 'Inter, -apple-system, sans-serif',
+    },
+    flowchart: {
+      curve: 'basis',
+      padding: 20,
+      nodeSpacing: 40,
+      rankSpacing: 60,
+    },
+  });
+</script>
+
+</body>
+</html>

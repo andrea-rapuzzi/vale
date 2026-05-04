@@ -1,43 +1,41 @@
-# Astro Starter Kit: Minimal
+# YTS Frontend
 
-```sh
-npm create astro@latest -- --template minimal
+Astro 6 SSR application for YouTube Transcript Search, deployed on Vercel.
+
+## Stack
+
+- **Astro 6** — server-side rendering with Vercel adapter
+- **TailwindCSS 4** — utility-first styling
+- **TypeScript** — strict mode
+- **@supabase/ssr** — auth session management
+
+## Development
+
+```bash
+npm install
+cp .env.example .env   # fill in the variables
+npm run dev            # starts at localhost:4321
 ```
 
-> 🧑‍🚀 **Seasoned astronaut?** Delete this file. Have fun!
+## Environment variables
 
-## 🚀 Project Structure
+| Variable | Description |
+|---|---|
+| `PUBLIC_SUPABASE_URL` | Supabase project URL |
+| `PUBLIC_SUPABASE_ANON_KEY` | Supabase anonymous key |
+| `PUBLIC_BACKEND_URL` | Backend URL for client-side fetches |
+| `BACKEND_URL` | Backend URL for server-side fetches (middleware) |
 
-Inside of your Astro project, you'll see the following folders and files:
+## Commands
 
-```text
-/
-├── public/
-├── src/
-│   └── pages/
-│       └── index.astro
-└── package.json
-```
+| Command | Action |
+|---|---|
+| `npm run dev` | Start dev server at `localhost:4321` |
+| `npm run build` | Build for production |
+| `npm run preview` | Preview production build locally |
 
-Astro looks for `.astro` or `.md` files in the `src/pages/` directory. Each page is exposed as a route based on its file name.
+## Deployment
 
-There's nothing special about `src/components/`, but that's where we like to put any Astro/React/Vue/Svelte/Preact components.
+Connect to Vercel with root directory set to `frontend/`. The `@astrojs/vercel` adapter is already configured in `astro.config.mjs`.
 
-Any static assets, like images, can be placed in the `public/` directory.
-
-## 🧞 Commands
-
-All commands are run from the root of the project, from a terminal:
-
-| Command                   | Action                                           |
-| :------------------------ | :----------------------------------------------- |
-| `npm install`             | Installs dependencies                            |
-| `npm run dev`             | Starts local dev server at `localhost:4321`      |
-| `npm run build`           | Build your production site to `./dist/`          |
-| `npm run preview`         | Preview your build locally, before deploying     |
-| `npm run astro ...`       | Run CLI commands like `astro add`, `astro check` |
-| `npm run astro -- --help` | Get help using the Astro CLI                     |
-
-## 👀 Want to learn more?
-
-Feel free to check [our documentation](https://docs.astro.build) or jump into our [Discord server](https://astro.build/chat).
+See the [root README](../README.md) for full project documentation.
