@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "frontend",
-      "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--", "--port", "4321", "--host"],
+      "runtimeExecutable": "/Users/andrea/Webprojects/Vale/frontend/node_modules/.bin/astro",
+      "runtimeArgs": ["dev", "--port", "4321", "--host"],
       "cwd": "${workspaceFolder}/frontend",
       "port": 4321
     },

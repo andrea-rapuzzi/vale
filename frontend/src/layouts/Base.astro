@@ -35,9 +35,24 @@ const canonicalUrl = canonicalPath ? `${siteUrl}${canonicalPath}` : null;
     <script define:vars={{ accessToken }}>window.__authToken = accessToken</script>
   </head>
   <body class="min-h-screen flex flex-col pb-[env(safe-area-inset-bottom)]">
+    <style>
+      @keyframes logo-in {
+        from { opacity: 0; transform: scale(0.96); }
+        to   { opacity: 0.8; transform: scale(1); }
+      }
+      .logo-img {
+        animation: logo-in 0.5s ease-out forwards;
+        transition: opacity 0.25s ease, transform 0.25s ease, filter 0.25s ease;
+      }
+      .logo-img:hover {
+        opacity: 1 !important;
+        transform: scale(1.05);
+        filter: drop-shadow(0 0 10px rgba(124, 58, 237, 0.75));
+      }
+    </style>
     <header class="border-b border-gray-800 px-6 py-4 flex items-center gap-6">
-      <a href="/" class="group flex items-center">
-        <img src="/logo.svg" alt="VALE" class="h-5 transition-all duration-300 opacity-80 group-hover:opacity-100 group-hover:scale-105 group-hover:drop-shadow-[0_0_8px_rgba(139,92,246,0.6)]" />
+      <a href="/" class="flex items-center">
+        <img src="/logo.svg" alt="VALE" class="h-4 logo-img" />
       </a>
       <nav class="flex gap-4 text-sm text-gray-400">
         <a href="/channels" class="hover:text-white transition-colors">Channels</a>
