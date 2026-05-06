@@ -59,27 +59,37 @@ def _refresh_cookies_if_needed() -> Optional[Path]:
 
 
 def _make_session() -> Optional[requests.Session]:
-    """Build a requests.Session with browser cookies and/or proxy configured, or None."""
-    proxy = settings.yt_proxy.strip() if settings.yt_proxy else None
+    """Build a requests.Session with browser cookies, or None. Proxy is handled separately via proxy_config."""
     cookies_path = _refresh_cookies_if_needed()
-
-    if cookies_path is None and not proxy:
+    if cookies_path is None:
         return None
-
     session = requests.Session()
-
-    if cookies_path:
-        cj = http.cookiejar.MozillaCookieJar(str(cookies_path))
-        try:
-            cj.load(ignore_discard=True, ignore_expires=True)
-            session.cookies.update(cj)
-        except Exception:
-            pass
-
-    if proxy:
-        session.proxies = {"http": proxy, "https": proxy}
-
+    cj = http.cookiejar.MozillaCookieJar(str(cookies_path))
+    try:
+        cj.load(ignore_discard=True, ignore_expires=True)
+        session.cookies.update(cj)
+    except Exception:
+        pass
     return session
+
+
+def _make_proxy_config():
+    """Return a ProxyConfig for youtube-transcript-api, or None if no proxy is configured.
+
+    Prefers WebshareProxyConfig (enables connection-per-request rotation and auto-retry)
+    over GenericProxyConfig when Webshare credentials are available.
+    """
+    from youtube_transcript_api.proxies import WebshareProxyConfig, GenericProxyConfig
+    username = settings.webshare_proxy_username.strip()
+    password = settings.webshare_proxy_password.strip()
+    if username and password:
+        if username.endswith("-rotate"):
+            username = username[: -len("-rotate")]
+        return WebshareProxyConfig(proxy_username=username, proxy_password=password)
+    proxy = settings.yt_proxy.strip() if settings.yt_proxy else None
+    if proxy:
+        return GenericProxyConfig(https_url=proxy)
+    return None
 
 
 def _yt_dlp_cookies_args() -> list[str]:
@@ -94,9 +104,17 @@ def _yt_dlp_cookies_args() -> list[str]:
 
 
 def _yt_dlp_proxy_args() -> list[str]:
-    """Return yt-dlp --proxy argument if YT_PROXY is configured."""
+    """Return yt-dlp --proxy argument if a proxy is configured."""
+    username = settings.webshare_proxy_username.strip()
+    password = settings.webshare_proxy_password.strip()
+    if username and password:
+        if not username.endswith("-rotate"):
+            username = f"{username}-rotate"
+        return ["--proxy", f"http://{username}:{password}@p.webshare.io:80"]
     proxy = settings.yt_proxy.strip() if settings.yt_proxy else None
-    return ["--proxy", proxy] if proxy else []
+    if proxy:
+        return ["--proxy", proxy.rstrip("/")]
+    return []
 
 
 def fetch_channel_videos(url: str) -> tuple[str, list[dict]]:
@@ -202,7 +220,8 @@ def _classify_error(msg: str) -> str:
 def _fetch_via_transcript_api(youtube_id: str) -> tuple[Optional[list[dict]], Optional[str]]:
     """Try youtube-transcript-api. Returns (cues, reason). Reason is None on success."""
     session = _make_session()
-    api = YouTubeTranscriptApi(http_client=session) if session else YouTubeTranscriptApi()
+    proxy_config = _make_proxy_config()
+    api = YouTubeTranscriptApi(proxy_config=proxy_config, http_client=session)
 
     try:
         transcript_list = api.list(youtube_id)
