@@ -30,6 +30,10 @@
   const statusEl = document.getElementById('video-status')!;
   const apiBase = import.meta.env.PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
 
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') btn.click();
+  });
+
   btn.addEventListener('click', async () => {
     const url = input.value.trim();
     if (!url) return;
