@@ -16,18 +16,32 @@ log = logging.getLogger(__name__)
 
 
 def _cookies_file() -> Optional[Path]:
-    """Return path to cookies file if a browser is configured, else None."""
-    browser = settings.cookies_browser.strip()
-    if not browser:
-        return None
-    return settings.cookies_file_resolved
+    """Return path to cookies file if cookies are configured (via env content or browser), else None."""
+    if settings.cookies_content.strip() or settings.cookies_browser.strip():
+        return settings.cookies_file_resolved
+    return None
 
 
 def _refresh_cookies_if_needed() -> Optional[Path]:
-    """Export browser cookies to Netscape file if missing or stale. Returns path or None."""
+    """Ensure a cookies.txt is on disk. Returns path or None.
+
+    If COOKIES_CONTENT is set, writes it (base64-decoded) to disk once.
+    Otherwise exports from the configured browser if the file is missing or stale.
+    """
     cookies_path = _cookies_file()
     if cookies_path is None:
         return None
+
+    content = settings.cookies_content.strip()
+    if content:
+        if not cookies_path.exists():
+            import base64 as _b64
+            cookies_path.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                cookies_path.write_text(_b64.b64decode(content).decode())
+            except Exception as e:
+                log.warning("Failed to write cookies from COOKIES_CONTENT: %s", e)
+        return cookies_path if cookies_path.exists() else None
 
     max_age_sec = settings.cookies_max_age_hours * 3600
     if cookies_path.exists() and (time.time() - cookies_path.stat().st_mtime) < max_age_sec:

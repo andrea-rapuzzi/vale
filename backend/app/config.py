@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     supabase_jwt_secret: str = ""  # Legacy HS256 secret (fallback if supabase_url not set)
     daily_ai_call_limit: int = 0  # max AI calls per user per day; 0 = no limit
     cookies_browser: str = ""  # browser to export cookies from: chrome, firefox, etc.
+    cookies_content: str = ""  # base64-encoded cookies.txt for production (no browser on server)
     cookies_max_age_hours: int = 12  # refresh cookie file after this many hours
     cookies_dir: str = "./data"  # local directory for the cached cookies.txt file
     webshare_proxy_username: str = ""  # Webshare "Proxy Username" from dashboard.webshare.io/proxy/settings
