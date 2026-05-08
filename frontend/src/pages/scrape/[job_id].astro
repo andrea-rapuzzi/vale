@@ -3,7 +3,8 @@ import Base from '../../layouts/Base.astro';
 import ProgressPoller from '../../components/ProgressPoller.astro';
 const { job_id } = Astro.params;
 const videoParams = Astro.url.searchParams.getAll('v').map(id => `v=${id}`).join('&');
-const redirectUrl = videoParams ? `/chunks?${videoParams}` : '/query';
+const singleVideoId = Astro.url.searchParams.get('video');
+const redirectUrl = videoParams ? `/chunks?${videoParams}` : singleVideoId ? `/video/${singleVideoId}` : '/library';
 ---
 <Base title="Scraping">
   <div class="max-w-lg mx-auto space-y-6 pt-8">
