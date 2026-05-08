@@ -1,0 +1,168 @@
+---
+---
+<div class="bg-gray-900 rounded-xl p-6 space-y-5">
+  <div>
+    <h2 class="text-lg font-semibold text-white">YouTube Cookies</h2>
+    <p class="mt-1 text-sm text-gray-400">
+      Carica il file <code class="text-indigo-400">cookies.txt</code> esportato da Chrome con l'estensione
+      <a href="https://chromewebstore.google.com/detail/get-cookiestxt-locally/cclelndahbckbenkjhflpdbgdldlbecc" target="_blank" rel="noopener" class="text-indigo-400 hover:underline">Get cookies.txt LOCALLY</a>.
+      I cookie vengono codificati nel browser e salvati nel database — nessuna modifica alle variabili d'ambiente necessaria.
+    </p>
+  </div>
+
+  <!-- Current status -->
+  <div id="cookies-status" class="hidden text-sm rounded-lg px-4 py-3 bg-gray-800 border border-gray-700 flex items-center justify-between gap-4">
+    <div>
+      <span class="text-gray-300">Ultimo upload:</span>
+      <span id="cookies-date" class="text-white ml-1"></span>
+      <span class="text-gray-500 ml-3" id="cookies-lines"></span>
+    </div>
+    <button id="delete-btn" class="text-xs text-red-400 hover:text-red-300 transition-colors shrink-0">
+      Elimina
+    </button>
+  </div>
+  <p id="no-cookies-msg" class="text-sm text-gray-500 hidden">Nessun cookie salvato.</p>
+
+  <!-- Upload form -->
+  <div class="space-y-3">
+    <label class="block">
+      <span class="text-sm text-gray-400 block mb-2">Seleziona cookies.txt</span>
+      <input
+        id="cookies-file"
+        type="file"
+        accept=".txt"
+        class="block w-full text-sm text-gray-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 file:cursor-pointer file:transition-colors"
+      />
+    </label>
+    <p id="file-validation" class="text-sm hidden"></p>
+    <button
+      id="upload-btn"
+      disabled
+      class="px-5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+    >
+      Salva cookies
+    </button>
+  </div>
+
+  <p id="upload-error" class="text-sm text-red-400 hidden"></p>
+  <p id="upload-success" class="text-sm text-emerald-400 hidden"></p>
+</div>
+
+<script>
+  const apiBase = import.meta.env.PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
+  const fileInput = document.getElementById('cookies-file') as HTMLInputElement;
+  const uploadBtn = document.getElementById('upload-btn') as HTMLButtonElement;
+  const deleteBtn = document.getElementById('delete-btn') as HTMLButtonElement;
+  const validationEl = document.getElementById('file-validation')!;
+  const errorEl = document.getElementById('upload-error')!;
+  const successEl = document.getElementById('upload-success')!;
+  const statusEl = document.getElementById('cookies-status')!;
+  const noCookiesEl = document.getElementById('no-cookies-msg')!;
+  const cookiesDateEl = document.getElementById('cookies-date')!;
+  const cookiesLinesEl = document.getElementById('cookies-lines')!;
+
+  let pendingBase64 = '';
+
+  // Safe base64 encoding for arbitrary bytes
+  function toBase64(text: string): string {
+    const bytes = new TextEncoder().encode(text);
+    let binary = '';
+    bytes.forEach(b => binary += String.fromCharCode(b));
+    return btoa(binary);
+  }
+
+  function showStatus(data: { exists: boolean; uploaded_at?: string; line_count?: number }) {
+    if (data.exists) {
+      const date = data.uploaded_at ? new Date(data.uploaded_at).toLocaleString('it-IT') : '—';
+      cookiesDateEl.textContent = date;
+      cookiesLinesEl.textContent = data.line_count ? `${data.line_count} cookie` : '';
+      statusEl.classList.remove('hidden');
+      noCookiesEl.classList.add('hidden');
+    } else {
+      statusEl.classList.add('hidden');
+      noCookiesEl.classList.remove('hidden');
+    }
+  }
+
+  async function loadStatus() {
+    try {
+      const res = await fetch(`${apiBase}/api/settings/cookies`, {
+        headers: { Authorization: `Bearer ${await window.__getAuthToken()}` },
+      });
+      if (res.ok) showStatus(await res.json());
+    } catch {}
+  }
+
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files?.[0];
+    pendingBase64 = '';
+    uploadBtn.disabled = true;
+    validationEl.className = 'text-sm';
+    errorEl.classList.add('hidden');
+    successEl.classList.add('hidden');
+
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      if (!text.trim().startsWith('# Netscape HTTP Cookie File')) {
+        validationEl.textContent = 'File non valido. Assicurati di esportare con "Get cookies.txt LOCALLY".';
+        validationEl.classList.add('text-red-400');
+        validationEl.classList.remove('hidden');
+        return;
+      }
+      const lineCount = text.split('\n').filter(l => l.trim() && !l.startsWith('#')).length;
+      validationEl.textContent = `✓ File valido — ${lineCount} cookie trovati`;
+      validationEl.classList.add('text-emerald-400');
+      validationEl.classList.remove('hidden');
+      pendingBase64 = toBase64(text);
+      uploadBtn.disabled = false;
+    };
+    reader.readAsText(file);
+  });
+
+  uploadBtn.addEventListener('click', async () => {
+    if (!pendingBase64) return;
+    uploadBtn.disabled = true;
+    errorEl.classList.add('hidden');
+    successEl.classList.add('hidden');
+    try {
+      const res = await fetch(`${apiBase}/api/settings/cookies`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${await window.__getAuthToken()}`,
+        },
+        body: JSON.stringify({ content: pendingBase64 }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail ?? 'Errore durante il salvataggio');
+      successEl.textContent = `Cookie salvati (${data.line_count} righe).`;
+      successEl.classList.remove('hidden');
+      fileInput.value = '';
+      validationEl.classList.add('hidden');
+      pendingBase64 = '';
+      showStatus({ exists: true, uploaded_at: data.uploaded_at, line_count: data.line_count });
+    } catch (e: any) {
+      errorEl.textContent = e.message;
+      errorEl.classList.remove('hidden');
+      uploadBtn.disabled = false;
+    }
+  });
+
+  deleteBtn.addEventListener('click', async () => {
+    if (!confirm('Eliminare i cookie salvati?')) return;
+    try {
+      await fetch(`${apiBase}/api/settings/cookies`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${await window.__getAuthToken()}` },
+      });
+      showStatus({ exists: false });
+      successEl.textContent = 'Cookie eliminati.';
+      successEl.classList.remove('hidden');
+    } catch {}
+  });
+
+  loadStatus();
+</script>
