@@ -3,7 +3,7 @@ from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from .config import settings
 from .database import init_db, shutdown_pool
-from .routers import channel, scrape, query, video
+from .routers import channel, scrape, query, video, settings
 from .routers.query import queries_router
 from .routers.channel import channels_router
 from .routers.video import videos_router
@@ -36,6 +36,7 @@ app.include_router(query.router)
 app.include_router(queries_router)
 app.include_router(video.router)
 app.include_router(videos_router)
+app.include_router(settings.router)
 
 
 @app.get("/api/health")

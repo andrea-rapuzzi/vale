@@ -1,5 +1,6 @@
 import subprocess
 import json
+import re
 import time
 import tempfile
 import logging
@@ -7,6 +8,7 @@ import http.cookiejar
 import requests
 from pathlib import Path
 from typing import Optional
+
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import TranscriptsDisabled, NoTranscriptFound
 from ..config import settings
@@ -14,10 +16,43 @@ from .vtt_parser import parse_vtt
 
 log = logging.getLogger(__name__)
 
+_YT_ID_RE = re.compile(
+    r"(?:v=|youtu\.be/|/v/|/embed/|/shorts/)([A-Za-z0-9_-]{11})"
+)
+
+# Module-level cache for cookies content (avoids a DB query on every yt-dlp call).
+# None = not yet loaded; "" = loaded and empty; "<base64>" = loaded and present.
+_cookies_content_cache: "str | None" = None
+
+
+def _get_cookies_content() -> str:
+    """Return base64 cookies content from env var (priority) or DB (fallback)."""
+    global _cookies_content_cache
+    if settings.cookies_content.strip():
+        return settings.cookies_content.strip()
+    if _cookies_content_cache is not None:
+        return _cookies_content_cache
+    try:
+        from ..database import get_conn
+        with get_conn() as conn:
+            row = conn.execute(
+                "SELECT value FROM app_settings WHERE key = 'cookies_content'"
+            ).fetchone()
+            _cookies_content_cache = row["value"] if row else ""
+    except Exception as e:
+        log.debug("Could not read cookies from DB: %s", e)
+        _cookies_content_cache = ""
+    return _cookies_content_cache
+
+
+def _invalidate_cookies_cache() -> None:
+    global _cookies_content_cache
+    _cookies_content_cache = None
+
 
 def _cookies_file() -> Optional[Path]:
-    """Return path to cookies file if cookies are configured (via env content or browser), else None."""
-    if settings.cookies_content.strip() or settings.cookies_browser.strip():
+    """Return path to cookies file if cookies are configured (via env, DB, or browser), else None."""
+    if settings.cookies_content.strip() or settings.cookies_browser.strip() or _get_cookies_content():
         return settings.cookies_file_resolved
     return None
 
@@ -32,15 +67,26 @@ def _refresh_cookies_if_needed() -> Optional[Path]:
     if cookies_path is None:
         return None
 
-    content = settings.cookies_content.strip()
+    content = _get_cookies_content()
     if content:
-        if not cookies_path.exists():
-            import base64 as _b64
-            cookies_path.parent.mkdir(parents=True, exist_ok=True)
+        import base64 as _b64
+        import hashlib
+        try:
+            decoded_bytes = _b64.b64decode(content)
+        except Exception as e:
+            log.warning("Failed to decode cookies content: %s", e)
+            return None
+        cookies_path.parent.mkdir(parents=True, exist_ok=True)
+        needs_write = not cookies_path.exists()
+        if not needs_write:
+            existing_hash = hashlib.md5(cookies_path.read_bytes()).hexdigest()
+            new_hash = hashlib.md5(decoded_bytes).hexdigest()
+            needs_write = existing_hash != new_hash
+        if needs_write:
             try:
-                cookies_path.write_text(_b64.b64decode(content).decode())
+                cookies_path.write_bytes(decoded_bytes)
             except Exception as e:
-                log.warning("Failed to write cookies from COOKIES_CONTENT: %s", e)
+                log.warning("Failed to write cookies file: %s", e)
         return cookies_path if cookies_path.exists() else None
 
     max_age_sec = settings.cookies_max_age_hours * 3600
@@ -117,6 +163,10 @@ def _yt_dlp_cookies_args() -> list[str]:
     return []
 
 
+def _yt_dlp_extractor_args() -> list[str]:
+    return ["--extractor-args", "youtube:player_client=tv_embedded,default"]
+
+
 def _yt_dlp_proxy_args() -> list[str]:
     """Return yt-dlp --proxy argument if a proxy is configured."""
     username = settings.webshare_proxy_username.strip()
@@ -131,6 +181,25 @@ def _yt_dlp_proxy_args() -> list[str]:
     return []
 
 
+def _parse_youtube_id(url: str) -> Optional[str]:
+    m = _YT_ID_RE.search(url)
+    return m.group(1) if m else None
+
+
+def _oembed_title(youtube_id: str) -> str:
+    try:
+        r = requests.get(
+            "https://www.youtube.com/oembed",
+            params={"url": f"https://www.youtube.com/watch?v={youtube_id}", "format": "json"},
+            timeout=10,
+        )
+        if r.status_code == 200:
+            return r.json().get("title") or "Untitled"
+    except Exception:
+        pass
+    return "Untitled"
+
+
 def fetch_channel_videos(url: str) -> tuple[str, list[dict]]:
     """Return (channel_name, list of video metadata dicts) for all videos in channel."""
     _refresh_cookies_if_needed()
@@ -142,6 +211,7 @@ def fetch_channel_videos(url: str) -> tuple[str, list[dict]]:
         "--playlist-end", "100",
         *_yt_dlp_cookies_args(),
         *_yt_dlp_proxy_args(),
+        *_yt_dlp_extractor_args(),
         url,
     ]
     try:
@@ -187,7 +257,22 @@ def fetch_channel_videos(url: str) -> tuple[str, list[dict]]:
 
 
 def fetch_video_info(url: str) -> dict:
-    """Fetch metadata for a single video URL. Returns {youtube_id, title, duration_sec, upload_date}."""
+    """Fetch metadata for a single video URL. Returns {youtube_id, title, duration_sec, upload_date}.
+
+    For standard YouTube video URLs the youtube_id is extracted directly and the title is
+    fetched via oEmbed (no cookies, no bot detection risk). yt-dlp is used only as fallback
+    for non-standard URLs (e.g. playlists or shortened links without a recognisable ID).
+    """
+    youtube_id = _parse_youtube_id(url)
+    if youtube_id:
+        return {
+            "youtube_id": youtube_id,
+            "title": _oembed_title(youtube_id),
+            "duration_sec": None,
+            "upload_date": None,
+        }
+
+    # Fallback: non-standard URL — use yt-dlp to resolve it
     _refresh_cookies_if_needed()
     cmd = [
         "yt-dlp",
@@ -196,6 +281,7 @@ def fetch_video_info(url: str) -> dict:
         "--no-warnings",
         *_yt_dlp_cookies_args(),
         *_yt_dlp_proxy_args(),
+        *_yt_dlp_extractor_args(),
         url,
     ]
     try:
@@ -294,6 +380,7 @@ def _fetch_via_transcript_api(youtube_id: str) -> tuple[Optional[list[dict]], Op
 
 def _fetch_via_ytdlp(youtube_id: str) -> tuple[Optional[list[dict]], Optional[str]]:
     """Download VTT via yt-dlp. Returns (cues, reason). Reason is None on success."""
+    _refresh_cookies_if_needed()
     url = f"https://www.youtube.com/watch?v={youtube_id}"
     cookies_args = _yt_dlp_cookies_args()
     last_stderr = ""
@@ -305,6 +392,7 @@ def _fetch_via_ytdlp(youtube_id: str) -> tuple[Optional[list[dict]], Optional[st
                 "yt-dlp",
                 *cookies_args,
                 *_yt_dlp_proxy_args(),
+                *_yt_dlp_extractor_args(),
                 "--write-auto-sub",
                 "--write-sub",
                 "--sub-lang", lang,
