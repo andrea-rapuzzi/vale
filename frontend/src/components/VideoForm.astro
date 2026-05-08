@@ -55,7 +55,7 @@
       if (data.already_scraped) {
         window.location.href = `/video/${data.video_id}`;
       } else {
-        window.location.href = `/scrape/${data.job_id}`;
+        window.location.href = `/scrape/${data.job_id}?video=${data.video_id}`;
       }
     } catch (e: any) {
       errEl.textContent = e.message;
