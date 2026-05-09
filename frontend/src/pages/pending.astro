@@ -1,8 +1,13 @@
 ---
 import '../styles/global.css';
+import { getLang, t } from '../lib/i18n';
+const lang = getLang(
+  Astro.request.headers.get('Cookie') ?? '',
+  Astro.request.headers.get('Accept-Language') ?? '',
+);
 ---
 <!doctype html>
-<html lang="en" class="bg-gray-950 text-gray-100 min-h-screen">
+<html lang={lang} class="bg-gray-950 text-gray-100 min-h-screen">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width" />
@@ -13,18 +18,15 @@ import '../styles/global.css';
       <h1 class="text-2xl font-bold text-white">VALE</h1>
 
       <div class="rounded-lg bg-yellow-950 border border-yellow-800 px-5 py-4 space-y-2 text-left">
-        <p class="text-sm font-medium text-yellow-300">Account pending approval</p>
-        <p class="text-sm text-yellow-200/70">
-          Your account has been created and is waiting for an admin to approve it.
-          Once approved, reload this page or sign in again to access the platform.
-        </p>
+        <p class="text-sm font-medium text-yellow-300">{t(lang, 'pending.heading')}</p>
+        <p class="text-sm text-yellow-200/70">{t(lang, 'pending.body')}</p>
       </div>
 
       <button
         id="logout-btn"
         class="text-sm text-gray-500 hover:text-gray-300 transition-colors"
       >
-        Sign out
+        {t(lang, 'pending.signOut')}
       </button>
     </div>
   </body>

@@ -1,8 +1,10 @@
 ---
 import Base from '../../layouts/Base.astro';
 import VideoSelector from '../../components/VideoSelector.astro';
+import { t } from '../../lib/i18n';
 
 const { id } = Astro.params;
+const lang = Astro.locals.lang ?? 'en';
 const apiBase = import.meta.env.BACKEND_URL ?? 'http://localhost:8000';
 
 let channel: any = null;
@@ -13,7 +15,7 @@ let error = '';
 
 try {
   const res = await fetch(`${apiBase}/api/channel/${id}/videos?limit=200`);
-  if (!res.ok) { error = 'Channel not found'; }
+  if (!res.ok) { error = t(lang, 'channel.notFound'); }
   else {
     const data = await res.json();
     channel = { id, name: data.channel_name };
@@ -33,10 +35,12 @@ try {
       <div class="flex items-start justify-between">
         <div>
           <h1 class="text-2xl font-bold text-white">{channel?.name}</h1>
-          <p class="text-sm text-gray-400 mt-1">{total} videos · {scrapedCount} already scraped</p>
+          <p class="text-sm text-gray-400 mt-1">
+            {t(lang, 'channel.videos', { total, scraped: scrapedCount })}
+          </p>
         </div>
         <a href="/query" class="text-sm text-indigo-400 hover:text-indigo-300 transition-colors">
-          → Go to Search
+          {t(lang, 'channel.goToSearch')}
         </a>
       </div>
 

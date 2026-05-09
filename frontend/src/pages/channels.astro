@@ -1,6 +1,8 @@
 ---
 import Base from '../layouts/Base.astro';
+import { t } from '../lib/i18n';
 
+const lang = Astro.locals.lang ?? 'en';
 const apiBase = import.meta.env.BACKEND_URL ?? 'http://localhost:8000';
 
 let channels: any[] = [];
@@ -18,22 +20,21 @@ try {
   error = e.message;
 }
 ---
-<Base title="Channels">
+<Base title={t(lang, 'channels.title')}>
   <div class="space-y-6">
     <div>
-      <h1 class="text-2xl font-bold text-white">Channels</h1>
+      <h1 class="text-2xl font-bold text-white">{t(lang, 'channels.title')}</h1>
       <p class="text-sm text-gray-400 mt-1">
-        {channels.length} {channels.length === 1 ? 'canale aggiunto' : 'canali aggiunti'} finora.
+        {channels.length === 1
+          ? t(lang, 'channels.subtitle', { count: channels.length })
+          : t(lang, 'channels.subtitle_plural', { count: channels.length })}
       </p>
     </div>
 
-    {error && <div class="text-red-400 text-sm">Errore: {error}</div>}
+    {error && <div class="text-red-400 text-sm" set:html={t(lang, 'channels.error', { msg: error })} />}
 
     {!error && channels.length === 0 && (
-      <p class="text-gray-400 text-sm">
-        Nessun canale ancora. Vai sulla <a href="/" class="text-indigo-400 hover:text-indigo-300">home</a>
-        e aggiungine uno.
-      </p>
+      <p class="text-gray-400 text-sm" set:html={t(lang, 'channels.empty')} />
     )}
 
     {channels.length > 0 && (
@@ -41,7 +42,7 @@ try {
         <input
           id="filter"
           type="text"
-          placeholder="Filtra per nome canale…"
+          placeholder={t(lang, 'channels.filterPlaceholder')}
           class="w-full px-4 py-2.5 rounded-lg bg-gray-900 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
         />
 
@@ -70,7 +71,7 @@ try {
           ))}
         </ul>
 
-        <p id="empty-filter" class="hidden text-sm text-gray-500 pt-4">Nessun canale corrisponde al filtro.</p>
+        <p id="empty-filter" class="hidden text-sm text-gray-500 pt-4">{t(lang, 'channels.emptyFilter')}</p>
       </div>
     )}
   </div>

@@ -1,70 +1,111 @@
 ---
+import { t } from '../lib/i18n';
+const lang = Astro.locals.lang ?? 'en';
 ---
 <div class="bg-gray-900 rounded-xl p-6 space-y-4">
-  <h2 class="text-lg font-semibold text-white">Analyze a YouTube Channel</h2>
-  <p class="text-sm text-gray-400">Enter a channel URL (e.g. <code class="text-indigo-400">https://www.youtube.com/@mkbhd</code>).</p>
+  <h2 class="text-lg font-semibold text-white">{t(lang, 'channelForm.heading')}</h2>
+  <p class="text-sm text-gray-400" set:html={t(lang, 'channelForm.description')} />
 
-  <div class="flex gap-3">
-    <input
-      id="channel-url"
-      type="url"
-      placeholder="https://www.youtube.com/@..."
-      class="flex-1 px-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
-    />
-    <button
-      id="fetch-btn"
-      class="px-5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-    >
-      Fetch Videos
-    </button>
+  <!-- Normal form (shown when free tier available) -->
+  <div id="channel-form-wrap" class="space-y-2">
+    <div class="flex gap-3">
+      <input
+        id="channel-url"
+        type="url"
+        placeholder={t(lang, 'channelForm.placeholder')}
+        class="flex-1 px-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+      />
+      <button
+        id="fetch-btn"
+        class="px-5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {t(lang, 'channelForm.fetchBtn')}
+      </button>
+    </div>
+    <p id="channel-error" class="text-sm text-red-400 hidden"></p>
+    <p id="channel-status" class="text-sm text-gray-400 hidden"></p>
   </div>
 
-  <p id="channel-error" class="text-sm text-red-400 hidden"></p>
-  <p id="channel-status" class="text-sm text-gray-400 hidden"></p>
+  <!-- Login gate (shown when free tier exhausted for anonymous users) -->
+  <div id="channel-login-gate" class="hidden rounded-lg border border-gray-700 bg-gray-800/50 p-4 space-y-2">
+    <p class="text-sm font-medium text-white">{t(lang, 'channelForm.loginGateTitle')}</p>
+    <p class="text-xs text-gray-400">{t(lang, 'channelForm.loginGateDesc')}</p>
+    <a
+      href="/login"
+      class="inline-block mt-1 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
+    >
+      {t(lang, 'channelForm.loginBtn')}
+    </a>
+  </div>
 </div>
 
 <script>
+  const formWrap = document.getElementById('channel-form-wrap')!;
+  const loginGate = document.getElementById('channel-login-gate')!;
   const btn = document.getElementById('fetch-btn') as HTMLButtonElement;
   const input = document.getElementById('channel-url') as HTMLInputElement;
   const errEl = document.getElementById('channel-error')!;
   const statusEl = document.getElementById('channel-status')!;
   const apiBase = import.meta.env.PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
 
-  async function poll(jobId: string): Promise<any> {
-    const maxAttempts = 400; // ~10 minuti totali con backoff
-    for (let i = 0; i < maxAttempts; i++) {
-      const r = await fetch(`${apiBase}/api/channel/fetch/status/${jobId}`);
-      const data = await r.json();
-      if (data.status === 'done') return data;
-      if (data.status === 'failed') throw new Error(data.error_json ?? 'Fetch failed');
-      const delay = i < 30 ? 1500 : 3000;
-      await new Promise(res => setTimeout(res, delay));
-    }
-    throw new Error('Timeout: il fetch del canale richiede troppo tempo. Riprova fra qualche minuto.');
+  function getCookie(name: string): string | undefined {
+    return document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith(name + '='))?.split('=')[1]
   }
 
-  btn.addEventListener('click', async () => {
-    const url = input.value.trim();
-    if (!url) return;
-    errEl.classList.add('hidden');
-    btn.disabled = true;
-    statusEl.textContent = 'Fetching channel videos…';
-    statusEl.classList.remove('hidden');
+  const isLoggedIn = !!window.__authToken
+  const usedFreeScrape = getCookie('vale-free-scrape') === '1'
+
+  if (!isLoggedIn && usedFreeScrape) {
+    formWrap.classList.add('hidden')
+    loginGate.classList.remove('hidden')
+  }
+
+  async function poll(jobId: string): Promise<any> {
+    const maxAttempts = 400
+    for (let i = 0; i < maxAttempts; i++) {
+      const r = await fetch(`${apiBase}/api/channel/fetch/status/${jobId}`)
+      const data = await r.json()
+      if (data.status === 'done') return data
+      if (data.status === 'failed') throw new Error(data.error_json ?? 'Fetch failed')
+      const delay = i < 30 ? 1500 : 3000
+      await new Promise(res => setTimeout(res, delay))
+    }
+    throw new Error('Timeout: channel fetch is taking too long. Please try again later.')
+  }
+
+  btn?.addEventListener('click', async () => {
+    const url = input.value.trim()
+    if (!url) return
+    errEl.classList.add('hidden')
+    btn.disabled = true
+    statusEl.textContent = 'Fetching channel videos…'
+    statusEl.classList.remove('hidden')
     try {
+      const token = await window.__getAuthToken()
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      if (window.__sessionToken) headers['X-Session-Token'] = window.__sessionToken
+
       const res = await fetch(`${apiBase}/api/channel/fetch`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${await window.__getAuthToken()}` },
+        headers,
         body: JSON.stringify({ url }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail ?? 'Unknown error');
-      const job = await poll(data.job_id);
-      window.location.href = `/channel/${job.ref_id}`;
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.detail ?? 'Unknown error')
+
+      // Mark free tier as used for anonymous users
+      if (!isLoggedIn) {
+        document.cookie = 'vale-free-scrape=1; path=/; max-age=31536000; samesite=lax'
+      }
+
+      const job = await poll(data.job_id)
+      window.location.href = `/channel/${job.ref_id}`
     } catch (e: any) {
-      errEl.textContent = e.message;
-      errEl.classList.remove('hidden');
-      statusEl.classList.add('hidden');
-      btn.disabled = false;
+      errEl.textContent = e.message
+      errEl.classList.remove('hidden')
+      statusEl.classList.add('hidden')
+      btn.disabled = false
     }
-  });
+  })
 </script>

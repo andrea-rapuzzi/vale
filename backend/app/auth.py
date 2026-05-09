@@ -99,6 +99,26 @@ def require_approved_user(request: Request) -> dict:
     return {"user_id": user_id, "email": email}
 
 
+def optional_user(request: Request) -> dict | None:
+    """Returns approved user dict if a valid Bearer token is present, None otherwise."""
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return None
+    try:
+        payload = _decode_jwt(request)
+        user_id: str = payload.get("sub", "")
+        email: str = payload.get("email", "")
+        with get_conn() as conn:
+            row = conn.execute(
+                "SELECT status FROM user_profiles WHERE id = %s", (user_id,)
+            ).fetchone()
+        if row is None or row["status"] != "approved":
+            return None
+        return {"user_id": user_id, "email": email}
+    except HTTPException:
+        return None
+
+
 def check_daily_ai_limit(user_id: str) -> None:
     """Raise 429 if the user has exceeded the daily AI call limit (0 = unlimited)."""
     if settings.daily_ai_call_limit == 0:

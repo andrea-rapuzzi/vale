@@ -1,6 +1,8 @@
 ---
 import Base from '../layouts/Base.astro';
+import { t } from '../lib/i18n';
 
+const lang = Astro.locals.lang ?? 'en';
 const apiBase = import.meta.env.BACKEND_URL ?? 'http://localhost:8000';
 
 let videos: any[] = [];
@@ -27,22 +29,21 @@ function fmtDuration(s: number | null) {
   return `${m}m${sec}s`;
 }
 ---
-<Base title="Library">
+<Base title={t(lang, 'library.title')}>
   <div class="space-y-6">
     <div>
-      <h1 class="text-2xl font-bold text-white">Transcript Library</h1>
+      <h1 class="text-2xl font-bold text-white">{t(lang, 'library.title')}</h1>
       <p class="text-sm text-gray-400 mt-1">
-        {total} video{total === 1 ? '' : 's'} con transcript salvato. Clicca un video per leggerlo per intero con timestamp.
+        {total === 1
+          ? t(lang, 'library.subtitle', { count: total })
+          : t(lang, 'library.subtitle_plural', { count: total })}
       </p>
     </div>
 
-    {error && <div class="text-red-400 text-sm">Errore: {error}</div>}
+    {error && <div class="text-red-400 text-sm" set:html={t(lang, 'library.error', { msg: error })} />}
 
     {!error && videos.length === 0 && (
-      <p class="text-gray-400 text-sm">
-        Nessun transcript salvato ancora. Vai sulla <a href="/" class="text-indigo-400 hover:text-indigo-300">home</a>,
-        aggiungi un canale e fai lo scrape di qualche video.
-      </p>
+      <p class="text-gray-400 text-sm" set:html={t(lang, 'library.empty')} />
     )}
 
     {videos.length > 0 && (
@@ -50,7 +51,7 @@ function fmtDuration(s: number | null) {
         <input
           id="filter"
           type="text"
-          placeholder="Filtra per titolo o canale…"
+          placeholder={t(lang, 'library.filterPlaceholder')}
           class="w-full px-4 py-2.5 rounded-lg bg-gray-900 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
         />
 
@@ -59,29 +60,29 @@ function fmtDuration(s: number | null) {
           id="compare-bar"
           class="hidden sticky bottom-4 z-10 flex items-center gap-3 px-5 py-3 rounded-xl bg-gray-800 border border-gray-700 shadow-xl"
         >
-          <span id="compare-count" class="text-sm text-gray-300 font-medium">0 / 3 selected</span>
+          <span id="compare-count" class="text-sm text-gray-300 font-medium">0 / 3 {t(lang, 'library.selected', { count: 0 })}</span>
           <span class="text-gray-600">·</span>
-          <span class="text-xs text-gray-500">Select 2–3 videos to compare</span>
+          <span class="text-xs text-gray-500">{t(lang, 'library.selectHint')}</span>
           <div class="ml-auto flex gap-2">
             <button
               id="compare-clear-btn"
               class="px-3 py-2 rounded-lg border border-gray-600 text-gray-400 text-sm hover:bg-gray-700 transition-colors"
             >
-              Clear
+              {t(lang, 'library.clear')}
             </button>
             <button
               id="compare-classic-btn"
               disabled
               class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              Classic Search
+              {t(lang, 'library.classicSearch')}
             </button>
             <button
               id="compare-ai-btn"
               disabled
               class="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              AI Search
+              {t(lang, 'library.aiSearch')}
             </button>
           </div>
         </div>
@@ -119,13 +120,13 @@ function fmtDuration(s: number | null) {
                 href={`/video/${v.id}`}
                 class="shrink-0 text-xs text-indigo-400 hover:text-indigo-300 font-medium open-link"
               >
-                Apri transcript →
+                {t(lang, 'library.openTranscript')}
               </a>
             </li>
           ))}
         </ul>
 
-        <p id="empty-filter" class="hidden text-sm text-gray-500 pt-4">Nessun video corrisponde al filtro.</p>
+        <p id="empty-filter" class="hidden text-sm text-gray-500 pt-4">{t(lang, 'library.emptyFilter')}</p>
       </div>
     )}
   </div>

@@ -1,7 +1,9 @@
 ---
 import Base from '../../layouts/Base.astro';
+import { t } from '../../lib/i18n';
 
 const { id } = Astro.params;
+const lang = Astro.locals.lang ?? 'en';
 const apiBase = import.meta.env.BACKEND_URL ?? 'http://localhost:8000';
 const publicApiBase = import.meta.env.PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
 
@@ -27,7 +29,7 @@ function fmtTime(s: number) {
   return `${m}:${String(sec).padStart(2,'0')}`;
 }
 ---
-<Base title={data?.title ?? 'Transcript'}>
+<Base title={data?.title ?? t(lang, 'video.filterPlaceholder')}>
   {error ? (
     <div class="text-red-400">{error}</div>
   ) : (
@@ -38,7 +40,7 @@ function fmtTime(s: number) {
         </a>
         <h1 class="text-2xl font-bold text-white">{data.title}</h1>
         <div class="flex items-center gap-3 text-xs text-gray-500">
-          <span id="chunk-count">{data.chunks.length} chunks</span>
+          <span id="chunk-count">{t(lang, 'video.chunks', { count: data.chunks.length })}</span>
           {data.duration_sec && <span>· {fmtTime(data.duration_sec)}</span>}
           <a
             href={`https://www.youtube.com/watch?v=${data.youtube_id}`}
@@ -46,7 +48,7 @@ function fmtTime(s: number) {
             rel="noopener noreferrer"
             class="text-indigo-400 hover:text-indigo-300"
           >
-            ▶ Open on YouTube
+            {t(lang, 'video.openOnYoutube')}
           </a>
         </div>
       </div>
@@ -55,48 +57,63 @@ function fmtTime(s: number) {
       <div class="rounded-lg border border-indigo-800/60 bg-indigo-950/20 p-4 space-y-3">
         <div class="flex items-center justify-between gap-3">
           <div class="flex items-center gap-2">
-            <span class="text-indigo-300 text-sm font-semibold">✨ AI Search</span>
-            <span class="text-xs text-gray-500">Ask a question; Claude analyzes the transcript and points you to the moments that matter.</span>
+            <span class="text-indigo-300 text-sm font-semibold">{t(lang, 'video.aiSearchHeading')}</span>
+            <span class="text-xs text-gray-500">{t(lang, 'video.aiSearchHint')}</span>
           </div>
           <button
             id="ai-toggle"
             class="shrink-0 px-3 py-1.5 rounded-md bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-colors"
           >
-            AI Search
+            {t(lang, 'video.aiSearchBtn')}
           </button>
         </div>
 
         <div id="ai-form" class="hidden space-y-3">
-          <div class="flex gap-2">
-            <input
-              id="ai-input"
-              type="text"
-              placeholder="Ask a question about this video…"
-              autocomplete="off"
-              class="flex-1 px-4 py-2.5 rounded-lg bg-gray-900 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
-            />
-            <button
-              id="ai-submit"
-              disabled
-              class="px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          <!-- Login gate for anonymous users who used their free AI search -->
+          <div id="ai-login-gate" class="hidden rounded-lg border border-gray-700 bg-gray-800/50 p-4 space-y-2">
+            <p class="text-sm font-medium text-white">{t(lang, 'video.loginGateTitle')}</p>
+            <p class="text-xs text-gray-400">{t(lang, 'video.loginGateDesc')}</p>
+            <a
+              href="/login"
+              class="inline-block mt-1 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
             >
-              Ask
-            </button>
+              {t(lang, 'video.loginBtn')}
+            </a>
           </div>
 
-          <p id="ai-status" class="hidden text-sm text-gray-400">Analyzing transcript…</p>
-          <p id="ai-error" class="hidden text-sm text-red-400"></p>
-
-          <div id="ai-result" class="hidden space-y-4">
-            <div class="rounded-lg bg-gray-900 border border-gray-800 p-4">
-              <h3 class="text-xs font-semibold uppercase tracking-wider text-indigo-300 mb-2">Answer</h3>
-              <p id="ai-answer" class="text-sm text-gray-100 leading-relaxed whitespace-pre-wrap"></p>
+          <!-- Actual search inputs -->
+          <div id="ai-search-inputs" class="space-y-3">
+            <div class="flex gap-2">
+              <input
+                id="ai-input"
+                type="text"
+                placeholder={t(lang, 'video.aiInputPlaceholder')}
+                autocomplete="off"
+                class="flex-1 px-4 py-2.5 rounded-lg bg-gray-900 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+              />
+              <button
+                id="ai-submit"
+                disabled
+                class="px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                {t(lang, 'video.askBtn')}
+              </button>
             </div>
 
-            <div id="ai-chunks-wrap" class="space-y-2">
-              <h3 class="text-xs font-semibold uppercase tracking-wider text-indigo-300">Most significant chunks</h3>
-              <div id="ai-chunks" class="space-y-2"></div>
-              <p id="ai-no-chunks" class="hidden text-xs text-gray-500">No specific chunks were highlighted for this answer.</p>
+            <p id="ai-status" class="hidden text-sm text-gray-400">{t(lang, 'video.analyzing')}</p>
+            <p id="ai-error" class="hidden text-sm text-red-400"></p>
+
+            <div id="ai-result" class="hidden space-y-4">
+              <div class="rounded-lg bg-gray-900 border border-gray-800 p-4">
+                <h3 class="text-xs font-semibold uppercase tracking-wider text-indigo-300 mb-2">{t(lang, 'video.answerHeading')}</h3>
+                <p id="ai-answer" class="text-sm text-gray-100 leading-relaxed whitespace-pre-wrap"></p>
+              </div>
+
+              <div id="ai-chunks-wrap" class="space-y-2">
+                <h3 class="text-xs font-semibold uppercase tracking-wider text-indigo-300">{t(lang, 'video.chunksHeading')}</h3>
+                <div id="ai-chunks" class="space-y-2"></div>
+                <p id="ai-no-chunks" class="hidden text-xs text-gray-500">{t(lang, 'video.noChunks')}</p>
+              </div>
             </div>
           </div>
         </div>
@@ -109,7 +126,7 @@ function fmtTime(s: number) {
             <input
               id="search-input"
               type="text"
-              placeholder="Filter chunks…"
+              placeholder={t(lang, 'video.filterPlaceholder')}
               autocomplete="off"
               class="w-full px-4 py-2.5 pr-9 rounded-lg bg-gray-900 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
             />
@@ -145,7 +162,7 @@ function fmtTime(s: number) {
       </div>
 
       <p id="no-results" class="hidden text-sm text-gray-500 text-center py-8">
-        Nessun chunk corrisponde alla ricerca.
+        {t(lang, 'video.noResults')}
       </p>
     </div>
   )}
@@ -213,6 +230,8 @@ function fmtTime(s: number) {
 <script define:vars={{ publicApiBase, videoId: id, youtubeId: data?.youtube_id }}>
   const toggleBtn = document.getElementById('ai-toggle');
   const form = document.getElementById('ai-form');
+  const aiLoginGate = document.getElementById('ai-login-gate');
+  const aiSearchInputs = document.getElementById('ai-search-inputs');
   const aiInput = document.getElementById('ai-input');
   const submitBtn = document.getElementById('ai-submit');
   const statusEl = document.getElementById('ai-status');
@@ -222,16 +241,32 @@ function fmtTime(s: number) {
   const chunksEl = document.getElementById('ai-chunks');
   const noChunksEl = document.getElementById('ai-no-chunks');
 
+  function getCookie(name) {
+    return document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith(name + '='))?.split('=')[1]
+  }
+
+  const isLoggedIn = !!window.__authToken
+  const usedFreeAi = getCookie('vale-free-ai') === '1'
+
+  function showAiGate() {
+    if (aiLoginGate) aiLoginGate.classList.remove('hidden')
+    if (aiSearchInputs) aiSearchInputs.classList.add('hidden')
+  }
+
   if (toggleBtn && form && aiInput && submitBtn) {
     toggleBtn.addEventListener('click', () => {
       const open = !form.classList.contains('hidden');
       if (open) {
         form.classList.add('hidden');
-        toggleBtn.textContent = 'AI Search';
+        toggleBtn.textContent = toggleBtn.dataset.openLabel || 'AI Search';
       } else {
         form.classList.remove('hidden');
-        toggleBtn.textContent = 'Hide';
-        aiInput.focus();
+        toggleBtn.textContent = toggleBtn.dataset.hideLabel || 'Hide';
+        if (!isLoggedIn && usedFreeAi) {
+          showAiGate()
+        } else {
+          aiInput.focus()
+        }
       }
     });
 
@@ -260,6 +295,12 @@ function fmtTime(s: number) {
     }
 
     submitBtn.addEventListener('click', async () => {
+      // Re-check gate at submit time (cookie may have been set during session)
+      if (!isLoggedIn && getCookie('vale-free-ai') === '1') {
+        showAiGate()
+        return
+      }
+
       const question = aiInput.value.trim();
       if (!question) return;
 
@@ -270,13 +311,23 @@ function fmtTime(s: number) {
       statusEl.classList.remove('hidden');
 
       try {
+        const token = await window.__getAuthToken()
+        const headers = { 'Content-Type': 'application/json' }
+        if (token) headers['Authorization'] = `Bearer ${token}`
+        if (window.__sessionToken) headers['X-Session-Token'] = window.__sessionToken
+
         const res = await fetch(`${publicApiBase}/api/video/${videoId}/ai-search`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${await window.__getAuthToken()}` },
+          headers,
           body: JSON.stringify({ question }),
         });
         const body = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(body.detail ?? `HTTP ${res.status}`);
+
+        // Mark free tier as used for anonymous users
+        if (!isLoggedIn) {
+          document.cookie = 'vale-free-ai=1; path=/; max-age=31536000; samesite=lax'
+        }
 
         answerEl.textContent = body.answer || '(no answer)';
         chunksEl.innerHTML = '';

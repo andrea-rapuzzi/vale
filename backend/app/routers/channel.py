@@ -1,12 +1,12 @@
 import asyncio
 import logging
 from datetime import datetime, timezone
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from ..models.api import ChannelFetchRequest, JobStatusOut, VideoOut
 from ..database import get_conn
 from ..jobs import create_job, update_job, get_job
 from ..services.youtube import fetch_channel_videos
-from ..auth import require_approved_user
+from ..auth import optional_user
 
 log = logging.getLogger(__name__)
 
@@ -18,15 +18,22 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-async def _fetch_job(job_id: str, url: str) -> None:
+async def _fetch_job(job_id: str, url: str, user_id: str | None, session_token: str | None) -> None:
     update_job(job_id, status="running")
     try:
         channel_name, videos = await asyncio.to_thread(fetch_channel_videos, url)
 
         with get_conn() as conn:
             conn.execute(
-                "INSERT INTO channels (url, name, fetched_at) VALUES (%s, %s, %s) ON CONFLICT(url) DO UPDATE SET name=excluded.name, fetched_at=excluded.fetched_at",
-                (url, channel_name, _now()),
+                """
+                INSERT INTO channels (url, name, fetched_at, user_id, session_token)
+                VALUES (%s, %s, %s, %s, %s)
+                ON CONFLICT(url) DO UPDATE
+                  SET name=excluded.name, fetched_at=excluded.fetched_at,
+                      user_id=COALESCE(channels.user_id, excluded.user_id),
+                      session_token=COALESCE(channels.session_token, excluded.session_token)
+                """,
+                (url, channel_name, _now(), user_id, session_token),
             )
             channel_id = conn.execute("SELECT id FROM channels WHERE url = %s", (url,)).fetchone()["id"]
             if videos:
@@ -51,11 +58,14 @@ async def _fetch_job(job_id: str, url: str) -> None:
 @router.post("/fetch")
 async def fetch_channel(
     req: ChannelFetchRequest,
+    request: Request,
     background_tasks: BackgroundTasks,
-    _user: dict = Depends(require_approved_user),
+    user: dict | None = Depends(optional_user),
 ):
+    session_token = request.headers.get("X-Session-Token") or None
+    user_id = user["user_id"] if user else None
     job_id = create_job("channel_fetch")
-    background_tasks.add_task(_fetch_job, job_id, req.url)
+    background_tasks.add_task(_fetch_job, job_id, req.url, user_id, session_token)
     return {"job_id": job_id, "status": "queued"}
 
 

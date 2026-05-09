@@ -1,67 +1,104 @@
 ---
+import { t } from '../lib/i18n';
+const lang = Astro.locals.lang ?? 'en';
 ---
 <div class="bg-gray-900 rounded-xl p-6 space-y-4">
-  <h2 class="text-lg font-semibold text-white">Scrape a Single Video</h2>
-  <p class="text-sm text-gray-400">Paste a YouTube video URL to scrape its transcript directly, without adding the whole channel.</p>
+  <h2 class="text-lg font-semibold text-white">{t(lang, 'videoForm.heading')}</h2>
+  <p class="text-sm text-gray-400">{t(lang, 'videoForm.description')}</p>
 
-  <div class="flex gap-3">
-    <input
-      id="video-url"
-      type="url"
-      placeholder="https://www.youtube.com/watch?v=..."
-      class="flex-1 px-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
-    />
-    <button
-      id="video-scrape-btn"
-      class="px-5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-    >
-      Scrape Video
-    </button>
+  <!-- Normal form -->
+  <div id="video-form-wrap" class="space-y-2">
+    <div class="flex gap-3">
+      <input
+        id="video-url"
+        type="url"
+        placeholder={t(lang, 'videoForm.placeholder')}
+        class="flex-1 px-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+      />
+      <button
+        id="video-scrape-btn"
+        class="px-5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {t(lang, 'videoForm.scrapeBtn')}
+      </button>
+    </div>
+    <p id="video-error" class="text-sm text-red-400 hidden"></p>
+    <p id="video-status" class="text-sm text-gray-400 hidden"></p>
   </div>
 
-  <p id="video-error" class="text-sm text-red-400 hidden"></p>
-  <p id="video-status" class="text-sm text-gray-400 hidden"></p>
+  <!-- Login gate -->
+  <div id="video-login-gate" class="hidden rounded-lg border border-gray-700 bg-gray-800/50 p-4 space-y-2">
+    <p class="text-sm font-medium text-white">{t(lang, 'videoForm.loginGateTitle')}</p>
+    <p class="text-xs text-gray-400">{t(lang, 'videoForm.loginGateDesc')}</p>
+    <a
+      href="/login"
+      class="inline-block mt-1 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
+    >
+      {t(lang, 'videoForm.loginBtn')}
+    </a>
+  </div>
 </div>
 
 <script>
+  const formWrap = document.getElementById('video-form-wrap')!;
+  const loginGate = document.getElementById('video-login-gate')!;
   const btn = document.getElementById('video-scrape-btn') as HTMLButtonElement;
   const input = document.getElementById('video-url') as HTMLInputElement;
   const errEl = document.getElementById('video-error')!;
   const statusEl = document.getElementById('video-status')!;
   const apiBase = import.meta.env.PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
 
+  function getCookie(name: string): string | undefined {
+    return document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith(name + '='))?.split('=')[1]
+  }
+
+  const isLoggedIn = !!window.__authToken
+  const usedFreeScrape = getCookie('vale-free-scrape') === '1'
+
+  if (!isLoggedIn && usedFreeScrape) {
+    formWrap.classList.add('hidden')
+    loginGate.classList.remove('hidden')
+  }
+
   input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') btn.click();
-  });
+    if (e.key === 'Enter') btn.click()
+  })
 
   btn.addEventListener('click', async () => {
-    const url = input.value.trim();
-    if (!url) return;
-    errEl.classList.add('hidden');
-    btn.disabled = true;
-    statusEl.textContent = 'Fetching video info…';
-    statusEl.classList.remove('hidden');
+    const url = input.value.trim()
+    if (!url) return
+    errEl.classList.add('hidden')
+    btn.disabled = true
+    statusEl.textContent = 'Fetching video info…'
+    statusEl.classList.remove('hidden')
     try {
+      const token = await window.__getAuthToken()
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      if (window.__sessionToken) headers['X-Session-Token'] = window.__sessionToken
+
       const res = await fetch(`${apiBase}/api/scrape/from-url`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${await window.__getAuthToken()}`,
-        },
+        headers,
         body: JSON.stringify({ url }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail ?? 'Unknown error');
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.detail ?? 'Unknown error')
+
+      if (!isLoggedIn) {
+        document.cookie = 'vale-free-scrape=1; path=/; max-age=31536000; samesite=lax'
+      }
+
       if (data.already_scraped) {
-        window.location.href = `/video/${data.video_id}`;
+        window.location.href = `/video/${data.video_id}`
       } else {
-        window.location.href = `/scrape/${data.job_id}?video=${data.video_id}`;
+        window.location.href = `/scrape/${data.job_id}?video=${data.video_id}`
       }
     } catch (e: any) {
-      errEl.textContent = e.message;
-      errEl.classList.remove('hidden');
-      statusEl.classList.add('hidden');
-      btn.disabled = false;
+      errEl.textContent = e.message
+      errEl.classList.remove('hidden')
+      statusEl.classList.add('hidden')
+      btn.disabled = false
     }
-  });
+  })
 </script>

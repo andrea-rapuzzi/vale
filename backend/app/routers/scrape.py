@@ -1,11 +1,11 @@
 import asyncio
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from ..models.api import ScrapeRequest, VideoUrlRequest, JobStatusOut
 from ..jobs import create_job, get_job
 from ..services.scraper import run_scrape_job
 from ..services.youtube import fetch_video_info
 from ..database import get_conn
-from ..auth import require_approved_user
+from ..auth import optional_user
 
 router = APIRouter(prefix="/api/scrape", tags=["scrape"])
 
@@ -14,7 +14,7 @@ router = APIRouter(prefix="/api/scrape", tags=["scrape"])
 async def start_scrape(
     req: ScrapeRequest,
     background_tasks: BackgroundTasks,
-    _user: dict = Depends(require_approved_user),
+    _user: dict | None = Depends(optional_user),
 ):
     job_id = create_job("scrape", total=len(req.video_ids))
     background_tasks.add_task(run_scrape_job, job_id, req.video_ids)
@@ -24,13 +24,17 @@ async def start_scrape(
 @router.post("/from-url")
 async def scrape_from_url(
     req: VideoUrlRequest,
+    request: Request,
     background_tasks: BackgroundTasks,
-    _user: dict = Depends(require_approved_user),
+    user: dict | None = Depends(optional_user),
 ):
     try:
         info = await asyncio.to_thread(fetch_video_info, req.url)
     except RuntimeError as e:
         raise HTTPException(400, str(e))
+
+    session_token = request.headers.get("X-Session-Token") or None
+    user_id = user["user_id"] if user else None
 
     with get_conn() as conn:
         channel_row = conn.execute(
