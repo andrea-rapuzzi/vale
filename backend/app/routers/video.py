@@ -1,11 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import datetime, timezone
+from fastapi import APIRouter, Depends, HTTPException, Request
 from ..database import get_conn
 from ..models.api import AISearchRequest
 from ..services.ai_search import ai_search
-from ..auth import require_approved_user
+from ..auth import optional_user
 
 router = APIRouter(prefix="/api/video", tags=["video"])
 videos_router = APIRouter(prefix="/api/videos", tags=["videos"])
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 
 @videos_router.get("/scraped")
@@ -104,7 +109,8 @@ async def get_transcript(video_id: int):
 async def video_ai_search(
     video_id: int,
     body: AISearchRequest,
-    _user: dict = Depends(require_approved_user),
+    request: Request,
+    user: dict | None = Depends(optional_user),
 ):
     with get_conn() as conn:
         video = conn.execute(
@@ -145,7 +151,6 @@ async def video_ai_search(
         result = await ai_search(body.question, video["title"], chunks, body.model)
     except Exception as e:
         cause = e
-        # Tenacity RetryError wraps the real exception in last_attempt.exception()
         last_attempt = getattr(e, "last_attempt", None)
         if last_attempt is not None:
             try:
@@ -154,5 +159,17 @@ async def video_ai_search(
                 cause = e
         msg = f"{type(cause).__name__}: {cause}"
         raise HTTPException(502, f"AI search failed: {msg[:300]}")
+
+    # Persist AI search for user history
+    session_token = request.headers.get("X-Session-Token") or None
+    user_id = user["user_id"] if user else None
+    with get_conn() as conn:
+        conn.execute(
+            """
+            INSERT INTO ai_searches (video_id, question, answer, user_id, session_token, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            """,
+            (video_id, body.question, result.get("answer"), user_id, session_token, _now()),
+        )
 
     return result

@@ -7,6 +7,7 @@ from .routers import channel, scrape, query, video, settings as settings_router
 from .routers.query import queries_router
 from .routers.channel import channels_router
 from .routers.video import videos_router
+from .routers.my import router as my_router
 from .auth import require_approved_user
 
 
@@ -37,6 +38,7 @@ app.include_router(queries_router)
 app.include_router(video.router)
 app.include_router(videos_router)
 app.include_router(settings_router.router)
+app.include_router(my_router)
 
 
 @app.get("/api/health")

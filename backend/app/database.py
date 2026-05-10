@@ -5,10 +5,12 @@ from .config import settings
 
 DDL = """
 CREATE TABLE IF NOT EXISTS channels (
-    id         BIGSERIAL PRIMARY KEY,
-    url        TEXT NOT NULL UNIQUE,
-    name       TEXT,
-    fetched_at TEXT NOT NULL
+    id            BIGSERIAL PRIMARY KEY,
+    url           TEXT NOT NULL UNIQUE,
+    name          TEXT,
+    fetched_at    TEXT NOT NULL,
+    user_id       UUID,
+    session_token TEXT
 );
 
 CREATE TABLE IF NOT EXISTS videos (
@@ -37,11 +39,30 @@ CREATE TABLE IF NOT EXISTS chunks (
 CREATE INDEX IF NOT EXISTS idx_chunks_video ON chunks(video_id);
 
 CREATE TABLE IF NOT EXISTS queries (
-    id         BIGSERIAL PRIMARY KEY,
-    intent     TEXT NOT NULL,
-    model      TEXT NOT NULL,
-    created_at TEXT NOT NULL
+    id            BIGSERIAL PRIMARY KEY,
+    intent        TEXT NOT NULL,
+    model         TEXT NOT NULL,
+    created_at    TEXT NOT NULL,
+    user_id       UUID,
+    session_token TEXT
 );
+
+CREATE TABLE IF NOT EXISTS ai_searches (
+    id            BIGSERIAL PRIMARY KEY,
+    video_id      BIGINT REFERENCES videos(id) ON DELETE CASCADE,
+    question      TEXT NOT NULL,
+    answer        TEXT,
+    user_id       UUID,
+    session_token TEXT,
+    created_at    TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_channels_user    ON channels(user_id);
+CREATE INDEX IF NOT EXISTS idx_channels_session ON channels(session_token);
+CREATE INDEX IF NOT EXISTS idx_ai_searches_user    ON ai_searches(user_id);
+CREATE INDEX IF NOT EXISTS idx_ai_searches_session ON ai_searches(session_token);
+CREATE INDEX IF NOT EXISTS idx_queries_user    ON queries(user_id);
+CREATE INDEX IF NOT EXISTS idx_queries_session ON queries(session_token);
 
 CREATE TABLE IF NOT EXISTS results (
     id           BIGSERIAL PRIMARY KEY,
@@ -70,6 +91,10 @@ CREATE TABLE IF NOT EXISTS jobs (
 );
 
 ALTER TABLE jobs ADD COLUMN IF NOT EXISTS updated_at TEXT;
+ALTER TABLE channels ADD COLUMN IF NOT EXISTS user_id UUID;
+ALTER TABLE channels ADD COLUMN IF NOT EXISTS session_token TEXT;
+ALTER TABLE queries ADD COLUMN IF NOT EXISTS user_id UUID;
+ALTER TABLE queries ADD COLUMN IF NOT EXISTS session_token TEXT;
 
 CREATE TABLE IF NOT EXISTS app_settings (
     key        TEXT PRIMARY KEY,

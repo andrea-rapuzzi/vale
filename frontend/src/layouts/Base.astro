@@ -1,5 +1,6 @@
 ---
 import '../styles/global.css';
+import { t } from '../lib/i18n';
 interface Props {
   title?: string;
   description?: string;
@@ -8,12 +9,15 @@ interface Props {
 const { title = 'VALE', description = 'VALE — search across YouTube video transcripts with AI-powered semantic analysis.', canonicalPath } = Astro.props;
 const accessToken = Astro.locals.accessToken ?? ''
 const userEmail = Astro.locals.userEmail ?? ''
+const sessionToken = Astro.locals.sessionToken ?? ''
+const lang = Astro.locals.lang ?? 'en'
+const isLoggedIn = !!accessToken
 const siteUrl = import.meta.env.PUBLIC_SITE_URL ?? 'https://vale.app';
 const pageTitle = title === 'VALE' ? 'VALE' : `${title} — VALE`;
 const canonicalUrl = canonicalPath ? `${siteUrl}${canonicalPath}` : null;
 ---
 <!doctype html>
-<html lang="en" class="bg-gray-950 text-gray-100 min-h-screen">
+<html lang={lang} class="bg-gray-950 text-gray-100 min-h-screen">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -31,7 +35,10 @@ const canonicalUrl = canonicalPath ? `${siteUrl}${canonicalPath}` : null;
     <meta name="twitter:title" content={pageTitle} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content={`${siteUrl}/open-graph-image.jpg`} />
-    <script define:vars={{ accessToken }}>window.__authToken = accessToken</script>
+    <script define:vars={{ accessToken, sessionToken }}>
+      window.__authToken = accessToken
+      window.__sessionToken = sessionToken
+    </script>
   </head>
   <body class="min-h-screen flex flex-col pb-[env(safe-area-inset-bottom)]">
     <style>
@@ -54,15 +61,22 @@ const canonicalUrl = canonicalPath ? `${siteUrl}${canonicalPath}` : null;
         <img src="/logo.svg" alt="VALE" class="h-4 logo-img" />
       </a>
       <nav class="flex gap-4 text-sm text-gray-400">
-        <a href="/channels" class="hover:text-white transition-colors">Channels</a>
-        <a href="/library" class="hover:text-white transition-colors">Library</a>
-        <a href="/settings" class="hover:text-white transition-colors">Settings</a>
+        <a href="/channels" class="hover:text-white transition-colors">{t(lang, 'nav.channels')}</a>
+        <a href="/library" class="hover:text-white transition-colors">{t(lang, 'nav.library')}</a>
+        {isLoggedIn && <a href="/my" class="hover:text-white transition-colors">{t(lang, 'nav.myLibrary')}</a>}
+        <a href="/settings" class="hover:text-white transition-colors">{t(lang, 'nav.settings')}</a>
       </nav>
       <div class="ml-auto flex items-center gap-4">
         {userEmail && <span class="text-xs text-gray-500 hidden sm:block">{userEmail}</span>}
-        <button id="logout-btn" class="text-xs text-gray-500 hover:text-gray-300 transition-colors">
-          Sign out
-        </button>
+        {isLoggedIn ? (
+          <button id="logout-btn" class="text-xs text-gray-500 hover:text-gray-300 transition-colors">
+            {t(lang, 'nav.signOut')}
+          </button>
+        ) : (
+          <a href="/login" class="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
+            {t(lang, 'nav.signIn')}
+          </a>
+        )}
       </div>
     </header>
     <main class="flex-1 px-6 py-8 max-w-5xl mx-auto w-full">

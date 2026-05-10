@@ -1,8 +1,13 @@
 ---
 import '../styles/global.css';
+import { getLang, t } from '../lib/i18n';
+const lang = getLang(
+  Astro.request.headers.get('Cookie') ?? '',
+  Astro.request.headers.get('Accept-Language') ?? '',
+);
 ---
 <!doctype html>
-<html lang="en" class="bg-gray-950 text-gray-100 min-h-screen">
+<html lang={lang} class="bg-gray-950 text-gray-100 min-h-screen">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
@@ -20,12 +25,12 @@ import '../styles/global.css';
     <div class="w-full max-w-sm space-y-6">
       <div class="text-center space-y-3">
         <img src="/logo.svg" alt="VALE" class="h-6 mx-auto opacity-90" />
-        <p class="text-sm text-gray-400">Sign in to your account</p>
+        <p class="text-sm text-gray-400">{t(lang, 'login.title')}</p>
       </div>
 
       <form id="login-form" class="space-y-4">
         <div>
-          <label class="block text-sm font-medium text-gray-300 mb-1.5">Email</label>
+          <label class="block text-sm font-medium text-gray-300 mb-1.5">{t(lang, 'login.emailLabel')}</label>
           <input
             id="email"
             type="email"
@@ -35,7 +40,7 @@ import '../styles/global.css';
           />
         </div>
         <div>
-          <label class="block text-sm font-medium text-gray-300 mb-1.5">Password</label>
+          <label class="block text-sm font-medium text-gray-300 mb-1.5">{t(lang, 'login.passwordLabel')}</label>
           <input
             id="password"
             type="password"
@@ -52,13 +57,13 @@ import '../styles/global.css';
           id="login-btn"
           class="w-full py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
         >
-          Sign in
+          {t(lang, 'login.submitBtn')}
         </button>
       </form>
 
       <p class="text-center text-sm text-gray-500">
-        No account?
-        <a href="/register" class="text-indigo-400 hover:text-indigo-300">Request access</a>
+        {t(lang, 'login.noAccount')}
+        <a href="/register" class="text-indigo-400 hover:text-indigo-300">{t(lang, 'login.requestAccess')}</a>
       </p>
     </div>
   </body>
@@ -73,6 +78,10 @@ import '../styles/global.css';
   const errEl = document.getElementById('login-error')!
   const btn = document.getElementById('login-btn') as HTMLButtonElement
 
+  function getCookie(name: string): string | undefined {
+    return document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith(name + '='))?.split('=')[1]
+  }
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault()
     errEl.classList.add('hidden')
@@ -80,7 +89,7 @@ import '../styles/global.css';
     btn.textContent = 'Signing in…'
 
     const supabase = createClient()
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email: emailEl.value.trim(),
       password: passwordEl.value,
     })
@@ -89,8 +98,26 @@ import '../styles/global.css';
       errEl.textContent = error.message
       errEl.classList.remove('hidden')
       btn.disabled = false
-      btn.textContent = 'Sign in'
+      btn.textContent = btn.dataset.label || 'Sign in'
       return
+    }
+
+    // Claim anonymous session records
+    const sessionToken = getCookie('vale-session')
+    if (sessionToken && data.session) {
+      const apiBase = import.meta.env.PUBLIC_BACKEND_URL ?? 'http://localhost:8000'
+      try {
+        await fetch(`${apiBase}/api/my/session/claim`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${data.session.access_token}`,
+          },
+          body: JSON.stringify({ session_token: sessionToken }),
+        })
+      } catch {
+        // Non-critical: session claim failure doesn't block login
+      }
     }
 
     window.location.href = '/'
