@@ -1,5 +1,5 @@
 import json
-from anthropic import AsyncAnthropic
+from anthropic import AsyncAnthropic, RateLimitError, InternalServerError, APITimeoutError
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from ..config import settings
 
@@ -44,7 +44,7 @@ def _build_user_message(question: str, video_title: str, chunks: list[dict]) -> 
 
 
 @retry(
-    retry=retry_if_exception_type(Exception),
+    retry=retry_if_exception_type((RateLimitError, InternalServerError, APITimeoutError)),
     wait=wait_exponential(multiplier=1, min=2, max=30),
     stop=stop_after_attempt(3),
 )
@@ -72,7 +72,10 @@ async def ai_search(
     if not chunks:
         return {"answer": "This video has no transcript chunks to search.", "chunks": []}
 
-    client = AsyncAnthropic(api_key=settings.anthropic_api_key) if settings.anthropic_api_key else AsyncAnthropic()
+    client = AsyncAnthropic(
+        api_key=settings.anthropic_api_key if settings.anthropic_api_key else None,
+        timeout=90.0,
+    )
     user_msg = _build_user_message(question, video_title, chunks)
     raw = await _call_claude(client, user_msg, model)
     raw = raw.removeprefix("```json").removeprefix("```").removesuffix("```").strip()

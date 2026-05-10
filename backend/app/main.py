@@ -1,6 +1,9 @@
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
 from .config import settings
 from .database import init_db, shutdown_pool
 from .routers import channel, scrape, query, video, settings as settings_router
@@ -9,6 +12,14 @@ from .routers.channel import channels_router
 from .routers.video import videos_router
 from .routers.my import router as my_router
 from .auth import require_approved_user
+
+
+class TimeoutMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        try:
+            return await asyncio.wait_for(call_next(request), timeout=120.0)
+        except asyncio.TimeoutError:
+            return JSONResponse({"error": "Request timed out"}, status_code=504)
 
 
 @asynccontextmanager
@@ -22,6 +33,7 @@ app = FastAPI(title="YTS — YouTube Transcript Search", lifespan=lifespan)
 
 _allowed_origins = [settings.frontend_url, "http://localhost:4321", "http://localhost:4322"]
 
+app.add_middleware(TimeoutMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins,
