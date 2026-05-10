@@ -5,6 +5,7 @@ import { getLang } from './lib/i18n'
 function isPublicRoute(pathname: string): boolean {
   if (pathname === '/' || pathname === '/channels') return true
   if (pathname === '/login' || pathname === '/register') return true
+  if (pathname === '/privacy') return true
   if (/^\/channel\/\d+/.test(pathname)) return true
   if (/^\/video\/\d+/.test(pathname)) return true
   if (/^\/scrape\/[a-zA-Z0-9-]+/.test(pathname)) return true

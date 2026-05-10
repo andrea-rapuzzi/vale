@@ -3,7 +3,7 @@ export const it = {
     channels: 'Canali',
     library: 'Libreria',
     settings: 'Impostazioni',
-    myLibrary: 'La mia libreria',
+    myLibrary: 'Le mie attività',
     signOut: 'Esci',
     signIn: 'Accedi',
   },
@@ -90,7 +90,7 @@ export const it = {
     langIt: 'Italiano',
   },
   myLibrary: {
-    title: 'La mia libreria',
+    title: 'Le mie attività',
     channelsHeading: 'I miei canali',
     searchesHeading: 'Le mie ricerche AI',
     noChannels: 'Non hai ancora aggiunto nessun canale.',

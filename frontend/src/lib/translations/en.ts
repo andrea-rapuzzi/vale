@@ -3,7 +3,7 @@ export const en = {
     channels: 'Channels',
     library: 'Library',
     settings: 'Settings',
-    myLibrary: 'My Library',
+    myLibrary: 'My Activities',
     signOut: 'Sign out',
     signIn: 'Sign in',
   },
@@ -90,7 +90,7 @@ export const en = {
     langIt: 'Italiano',
   },
   myLibrary: {
-    title: 'My Library',
+    title: 'My Activities',
     channelsHeading: 'My Channels',
     searchesHeading: 'My AI Searches',
     noChannels: "You haven't added any channels yet.",
