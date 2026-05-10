@@ -74,7 +74,7 @@ function fmtTime(s: number) {
             <p class="text-sm font-medium text-white">{t(lang, 'video.loginGateTitle')}</p>
             <p class="text-xs text-gray-400">{t(lang, 'video.loginGateDesc')}</p>
             <a
-              href="/login"
+              href="/register"
               class="inline-block mt-1 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
             >
               {t(lang, 'video.loginBtn')}
@@ -166,6 +166,26 @@ function fmtTime(s: number) {
       </p>
     </div>
   )}
+
+  <!-- Register toast for anonymous users -->
+  <div id="register-toast" class="hidden fixed bottom-6 left-6 right-6 sm:left-auto sm:w-80 z-50 bg-gray-900 border border-gray-700 rounded-xl p-4 shadow-2xl space-y-3">
+    <p class="text-sm font-semibold text-white">{t(lang, 'toast.registerTitle')}</p>
+    <p class="text-xs text-gray-400">{t(lang, 'toast.registerDesc')}</p>
+    <div class="flex gap-2">
+      <a
+        href="/register"
+        class="flex-1 text-center px-3 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-colors"
+      >
+        {t(lang, 'toast.registerBtn')}
+      </a>
+      <button
+        id="toast-dismiss"
+        class="px-3 py-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white text-xs font-medium transition-colors"
+      >
+        {t(lang, 'toast.dismiss')}
+      </button>
+    </div>
+  </div>
 </Base>
 
 <script>
@@ -366,4 +386,16 @@ function fmtTime(s: number) {
       }
     });
   }
+</script>
+
+<script>
+  const toast = document.getElementById('register-toast');
+  const dismissBtn = document.getElementById('toast-dismiss');
+  if (toast && !window.__authToken && !sessionStorage.getItem('vale-toast-dismissed')) {
+    toast.classList.remove('hidden');
+  }
+  dismissBtn?.addEventListener('click', () => {
+    sessionStorage.setItem('vale-toast-dismissed', '1');
+    toast?.classList.add('hidden');
+  });
 </script>

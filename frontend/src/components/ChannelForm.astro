@@ -6,46 +6,57 @@ const lang = Astro.locals.lang ?? 'en';
   <h2 class="text-lg font-semibold text-white">{t(lang, 'channelForm.heading')}</h2>
   <p class="text-sm text-gray-400" set:html={t(lang, 'channelForm.description')} />
 
-  <!-- Normal form (shown when free tier available) -->
   <div id="channel-form-wrap" class="space-y-2">
-    <div class="flex gap-3">
+    <div class="relative flex gap-3">
       <input
         id="channel-url"
         type="url"
         placeholder={t(lang, 'channelForm.placeholder')}
-        class="flex-1 px-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+        class="flex-1 px-4 py-2.5 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm disabled:opacity-40 disabled:cursor-not-allowed"
       />
       <button
         id="fetch-btn"
-        class="px-5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        class="px-5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
       >
         {t(lang, 'channelForm.fetchBtn')}
       </button>
+      <!-- Click trap shown when gated so clicks on the disabled area surface the toast -->
+      <div id="channel-gate-overlay" class="hidden absolute inset-0 cursor-pointer rounded-lg"></div>
     </div>
     <p id="channel-error" class="text-sm text-red-400 hidden"></p>
     <p id="channel-status" class="text-sm text-gray-400 hidden"></p>
   </div>
+</div>
 
-  <!-- Login gate (shown when free tier exhausted for anonymous users) -->
-  <div id="channel-login-gate" class="hidden rounded-lg border border-gray-700 bg-gray-800/50 p-4 space-y-2">
-    <p class="text-sm font-medium text-white">{t(lang, 'channelForm.loginGateTitle')}</p>
-    <p class="text-xs text-gray-400">{t(lang, 'channelForm.loginGateDesc')}</p>
-    <a
-      href="/login"
-      class="inline-block mt-1 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors"
-    >
-      {t(lang, 'channelForm.loginBtn')}
+<!-- Toast: free tier exhausted for anonymous users -->
+<div id="channel-gate-toast" class="hidden fixed bottom-6 inset-x-4 sm:left-auto sm:right-6 sm:w-80 z-50 bg-gray-900 border border-gray-700 rounded-xl p-4 shadow-2xl space-y-3">
+  <div class="flex items-start justify-between gap-2">
+    <p class="text-sm font-semibold text-white">{t(lang, 'toast.registerTitle')}</p>
+    <button id="channel-toast-dismiss" class="shrink-0 text-gray-500 hover:text-gray-300 transition-colors" aria-label="Dismiss">
+      <svg xmlns="http://www.w3.org/2000/svg" class="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
+        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+      </svg>
+    </button>
+  </div>
+  <p class="text-xs text-gray-400">{t(lang, 'toast.registerDesc')}</p>
+  <div class="flex gap-2">
+    <a href="/register" class="flex-1 text-center px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-colors">
+      {t(lang, 'toast.registerBtn')}
+    </a>
+    <a href="/login" class="px-3 py-1.5 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 text-xs font-medium transition-colors">
+      {t(lang, 'toast.loginBtn')}
     </a>
   </div>
 </div>
 
 <script>
-  const formWrap = document.getElementById('channel-form-wrap')!;
-  const loginGate = document.getElementById('channel-login-gate')!;
   const btn = document.getElementById('fetch-btn') as HTMLButtonElement;
   const input = document.getElementById('channel-url') as HTMLInputElement;
   const errEl = document.getElementById('channel-error')!;
   const statusEl = document.getElementById('channel-status')!;
+  const overlay = document.getElementById('channel-gate-overlay')!;
+  const toast = document.getElementById('channel-gate-toast')!;
+  const dismissBtn = document.getElementById('channel-toast-dismiss')!;
   const apiBase = import.meta.env.PUBLIC_BACKEND_URL ?? 'http://localhost:8000';
 
   function getCookie(name: string): string | undefined {
@@ -53,12 +64,27 @@ const lang = Astro.locals.lang ?? 'en';
   }
 
   const isLoggedIn = !!window.__authToken
-  const usedFreeScrape = getCookie('vale-free-scrape') === '1'
+  const usedFreeChannel = getCookie('vale-free-channel') === '1'
+  const isGated = !isLoggedIn && usedFreeChannel
 
-  if (!isLoggedIn && usedFreeScrape) {
-    formWrap.classList.add('hidden')
-    loginGate.classList.remove('hidden')
+  function showToast() {
+    toast.classList.remove('hidden');
   }
+
+  if (isGated) {
+    input.disabled = true;
+    btn.disabled = true;
+    overlay.classList.remove('hidden');
+    overlay.addEventListener('click', showToast);
+    if (!sessionStorage.getItem('vale-channel-toast-dismissed')) {
+      showToast();
+    }
+  }
+
+  dismissBtn.addEventListener('click', () => {
+    toast.classList.add('hidden');
+    sessionStorage.setItem('vale-channel-toast-dismissed', '1');
+  });
 
   async function poll(jobId: string): Promise<any> {
     const maxAttempts = 400
@@ -96,7 +122,7 @@ const lang = Astro.locals.lang ?? 'en';
 
       // Mark free tier as used for anonymous users
       if (!isLoggedIn) {
-        document.cookie = 'vale-free-scrape=1; path=/; max-age=31536000; samesite=lax'
+        document.cookie = 'vale-free-channel=1; path=/; max-age=31536000; samesite=lax'
       }
 
       const job = await poll(data.job_id)
