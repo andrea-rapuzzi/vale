@@ -16,7 +16,7 @@ export const en = {
     heading: 'Analyze a YouTube Channel',
     description: 'Enter a channel URL (e.g. <code>https://www.youtube.com/@mkbhd</code>).',
     placeholder: 'https://www.youtube.com/@...',
-    fetchBtn: 'Fetch Videos',
+    fetchBtn: 'Search Channel',
     fetching: 'Fetching channel videos…',
     loginGateTitle: 'Sign up to add more channels',
     loginGateDesc: "You've used your free channel index. Sign up to add more.",
@@ -149,5 +149,11 @@ export const en = {
     error: 'Error',
     loading: 'Loading…',
     back: '← Back',
+  },
+  cookieBanner: {
+    title: 'Cookie Monster Not Invited.',
+    subtitle: 'VALE doesn\'t feast on tracking cookies. We only use the essentials to keep things running smoothly. ',
+    privacyLink: 'Privacy Policy',
+    cta: 'OK',
   },
 }
