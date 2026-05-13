@@ -1,11 +1,13 @@
 ---
 import '../styles/global.css';
 import { t } from '../lib/i18n';
+
 interface Props {
   title?: string;
   description?: string;
   canonicalPath?: string;
 }
+
 const { title = 'VALE', description = 'VALE — search across YouTube video transcripts with AI-powered semantic analysis.', canonicalPath } = Astro.props;
 const accessToken = Astro.locals.accessToken ?? ''
 const userEmail = Astro.locals.userEmail ?? ''
@@ -15,6 +17,21 @@ const isLoggedIn = !!accessToken
 const siteUrl = import.meta.env.PUBLIC_SITE_URL ?? 'https://vale.app';
 const pageTitle = title === 'VALE' ? 'VALE' : `${title} — VALE`;
 const canonicalUrl = canonicalPath ? `${siteUrl}${canonicalPath}` : null;
+
+const initials = userEmail ? userEmail[0].toUpperCase() : '?';
+
+function isActive(href: string): boolean {
+  const p = Astro.url.pathname;
+  if (href === '/channels') return p === '/channels' || p.startsWith('/channel/');
+  if (href === '/library')  return p === '/library'  || p.startsWith('/video/');
+  return p === href;
+}
+
+const navItems = [
+  { href: '/channels', label: t(lang, 'nav.channels') },
+  { href: '/library',  label: t(lang, 'nav.library')  },
+  ...(isLoggedIn ? [{ href: '/my', label: t(lang, 'nav.myLibrary') }] : []),
+];
 ---
 <!doctype html>
 <html lang={lang} class="bg-gray-950 text-gray-100 min-h-screen">
@@ -44,50 +61,224 @@ const canonicalUrl = canonicalPath ? `${siteUrl}${canonicalPath}` : null;
     <style>
       @keyframes logo-in {
         from { opacity: 0; transform: scale(0.96); }
-        to   { opacity: 0.8; transform: scale(1); }
+        to   { transform: scale(1); }
       }
       .logo-img {
-        animation: logo-in 0.5s ease-out forwards;
-        transition: opacity 0.25s ease, transform 0.25s ease, filter 0.25s ease;
+        opacity: 0.8;
+        animation: logo-in 200ms cubic-bezier(0.23, 1, 0.32, 1) forwards;
+        transition: opacity 200ms ease, transform 200ms ease, filter 200ms ease;
       }
       .logo-img:hover {
-        opacity: 1 !important;
+        opacity: 1;
         transform: scale(1.05);
         filter: drop-shadow(0 0 10px rgba(124, 58, 237, 0.75));
       }
+
+      /* Profile dropdown */
+      #profile-dropdown { display: none; transform-origin: top right; }
+      #profile-dropdown.is-open {
+        display: block;
+        animation: dropdown-in 0.15s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+      }
+      @keyframes dropdown-in {
+        from { opacity: 0; transform: translateY(-6px) scale(0.97); }
+        to   { opacity: 1; transform: translateY(0) scale(1); }
+      }
+
+      /* Mobile drawer */
+      #mobile-drawer { display: none; }
+      #mobile-drawer.is-open {
+        display: flex;
+        flex-direction: column;
+        animation: drawer-in 200ms cubic-bezier(0.23, 1, 0.32, 1) forwards;
+      }
+      #mobile-drawer.is-closing {
+        display: flex;
+        flex-direction: column;
+        animation: drawer-out 150ms ease-out forwards;
+      }
+      @keyframes drawer-in {
+        from { opacity: 0; transform: translateY(-6px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+      @keyframes drawer-out {
+        from { opacity: 1; transform: translateY(0); }
+        to   { opacity: 0; transform: translateY(-6px); }
+      }
+      /* Hover only on pointer devices — prevents sticky states on touch */
+      @media (hover: hover) and (pointer: fine) {
+        #mobile-drawer a:hover  { background-color: rgb(17 24 39 / 0.6); color: #fff; }
+        #mobile-drawer button:hover { background-color: rgb(17 24 39 / 0.6); color: #fff; }
+      }
+      @media not all and (hover: hover) {
+        #mobile-drawer a,
+        #mobile-drawer button { transition: none; }
+      }
+
+      /* Hamburger → X */
+      .ham-line {
+        transition: transform 0.2s cubic-bezier(0.23, 1, 0.32, 1), opacity 0.15s ease;
+      }
+      #mobile-menu-btn.is-open .ham-line-1 { transform: translateY(6px) rotate(45deg); }
+      #mobile-menu-btn.is-open .ham-line-2 { opacity: 0; transform: scaleX(0); }
+      #mobile-menu-btn.is-open .ham-line-3 { transform: translateY(-6px) rotate(-45deg); }
     </style>
-    <header class="border-b border-gray-800 px-6 py-4 flex items-center gap-6">
-      <a href="/" class="flex items-center">
+
+    <!-- Header -->
+    <header class="border-b border-gray-800 px-4 sm:px-6 py-3.5 flex items-center gap-4 sm:gap-6">
+
+      <a href="/" class="flex items-center shrink-0">
         <img src="/logo.svg" alt="VALE" class="h-4 logo-img" />
       </a>
-      <nav class="flex gap-4 text-sm text-gray-400">
-        <a href="/channels" class="hover:text-white transition-colors">{t(lang, 'nav.channels')}</a>
-        <a href="/library" class="hover:text-white transition-colors">{t(lang, 'nav.library')}</a>
-        {isLoggedIn && <a href="/my" class="hover:text-white transition-colors">{t(lang, 'nav.myLibrary')}</a>}
-        <a href="/settings" class="hover:text-white transition-colors">{t(lang, 'nav.settings')}</a>
+
+      <!-- Desktop nav -->
+      <nav class="hidden sm:flex items-center gap-5 text-sm" aria-label="Navigazione principale">
+        {navItems.map(({ href, label }) => (
+          <a
+            href={href}
+            class={isActive(href) ? 'text-white font-medium' : 'text-gray-400 hover:text-white transition-colors'}
+            aria-current={isActive(href) ? 'page' : undefined}
+          >
+            {label}
+          </a>
+        ))}
       </nav>
-      <div class="ml-auto flex items-center gap-4">
-        {userEmail && <span class="text-xs text-gray-500 hidden sm:block">{userEmail}</span>}
+
+      <div class="ml-auto flex items-center gap-2">
         {isLoggedIn ? (
-          <button id="logout-btn" class="text-xs text-gray-500 hover:text-gray-300 transition-colors">
+          <!-- Profile dropdown (desktop) -->
+          <div class="relative hidden sm:block" id="profile-menu-wrap">
+            <button
+              id="profile-btn"
+              aria-haspopup="menu"
+              aria-expanded="false"
+              aria-label="Menu account"
+              class="w-8 h-8 rounded-full bg-indigo-600 hover:bg-indigo-500 flex items-center justify-center text-xs font-bold text-white transition-colors select-none"
+            >
+              {initials}
+            </button>
+            <div
+              id="profile-dropdown"
+              role="menu"
+              aria-labelledby="profile-btn"
+              class="absolute right-0 top-full mt-2 w-56 bg-gray-900 border border-gray-800 rounded-xl shadow-2xl overflow-hidden z-40"
+            >
+              <div class="px-4 py-3 border-b border-gray-800">
+                <p class="text-xs text-gray-500 truncate" title={userEmail}>{userEmail}</p>
+              </div>
+              <a
+                href="/settings"
+                role="menuitem"
+                class={`flex items-center px-4 py-2.5 text-sm transition-colors ${isActive('/settings') ? 'text-white bg-gray-800' : 'text-gray-300 hover:text-white hover:bg-gray-800/80'}`}
+              >
+                {t(lang, 'nav.settings')}
+              </a>
+              <button
+                id="logout-btn"
+                role="menuitem"
+                class="w-full text-left flex items-center px-4 py-2.5 text-sm text-gray-300 hover:text-white hover:bg-gray-800/80 transition-colors"
+              >
+                {t(lang, 'nav.signOut')}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <a href="/login" class="hidden sm:inline-flex text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
+            {t(lang, 'nav.signIn')}
+          </a>
+        )}
+
+        <!-- Hamburger (mobile only) -->
+        <button
+          id="mobile-menu-btn"
+          class="sm:hidden flex flex-col items-center justify-center gap-[5px] w-10 h-10 text-gray-400 hover:text-white transition-colors -mr-1"
+          aria-label="Apri menu"
+          aria-expanded="false"
+          aria-controls="mobile-drawer"
+        >
+          <span class="ham-line ham-line-1 block h-px w-5 bg-current"></span>
+          <span class="ham-line ham-line-2 block h-px w-5 bg-current"></span>
+          <span class="ham-line ham-line-3 block h-px w-5 bg-current"></span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Mobile drawer (full-screen overlay) -->
+    <div
+      id="mobile-drawer"
+      class="fixed inset-0 z-50 bg-gray-950"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Menu navigazione"
+      aria-hidden="true"
+    >
+      <div class="flex items-center justify-between px-4 py-3.5 border-b border-gray-800 shrink-0">
+        <a href="/" class="flex items-center">
+          <img src="/logo.svg" alt="VALE" class="h-4 opacity-70" />
+        </a>
+        <button
+          id="mobile-close-btn"
+          class="w-10 h-10 flex items-center justify-center text-gray-400 hover:text-white hover:bg-gray-900 rounded-lg transition-colors"
+          aria-label="Chiudi menu"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M2 2L14 14M14 2L2 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+
+      <nav class="flex-1 flex flex-col px-3 py-3 overflow-y-auto" aria-label="Navigazione mobile">
+        {navItems.map(({ href, label }) => (
+          <a
+            href={href}
+            class={`flex items-center px-4 py-4 rounded-xl text-base transition-colors ${isActive(href) ? 'text-white font-medium bg-gray-900' : 'text-gray-400 hover:text-white hover:bg-gray-900/60'}`}
+            aria-current={isActive(href) ? 'page' : undefined}
+          >
+            {label}
+          </a>
+        ))}
+        <a
+          href="/settings"
+          class={`flex items-center px-4 py-4 rounded-xl text-base transition-colors ${isActive('/settings') ? 'text-white font-medium bg-gray-900' : 'text-gray-400 hover:text-white hover:bg-gray-900/60'}`}
+          aria-current={isActive('/settings') ? 'page' : undefined}
+        >
+          {t(lang, 'nav.settings')}
+        </a>
+      </nav>
+
+      <div class="shrink-0 px-3 py-4 border-t border-gray-800">
+        {isLoggedIn && (
+          <p class="px-4 text-xs text-gray-600 truncate mb-1">{userEmail}</p>
+        )}
+        {isLoggedIn && (
+          <button
+            id="mobile-logout-btn"
+            class="w-full flex items-center px-4 py-4 rounded-xl text-base text-gray-400 hover:text-white hover:bg-gray-900/60 transition-colors text-left"
+          >
             {t(lang, 'nav.signOut')}
           </button>
-        ) : (
-          <a href="/login" class="text-xs text-indigo-400 hover:text-indigo-300 transition-colors">
+        )}
+        {!isLoggedIn && (
+          <a
+            href="/login"
+            class="flex items-center px-4 py-4 rounded-xl text-base text-indigo-400 hover:text-indigo-300 hover:bg-gray-900/60 transition-colors"
+          >
             {t(lang, 'nav.signIn')}
           </a>
         )}
       </div>
-    </header>
+    </div>
+
     <main class="flex-1 px-6 py-8 max-w-5xl mx-auto w-full">
       <slot />
     </main>
+
     <footer class="border-t border-gray-800 px-6 py-5 text-center text-xs text-gray-600">
       <a href="https://www.andrearapuzzi.com" target="_blank" rel="noopener noreferrer"
          class="hover:text-gray-400 transition-colors">Andrea Rapuzzi</a>
       {' · '}
       <a href="/privacy" class="hover:text-gray-400 transition-colors">
-        {lang === 'it' ? 'Privacy Policy' : 'Privacy Policy'}
+        Privacy Policy
       </a>
     </footer>
   </body>
@@ -95,13 +286,84 @@ const canonicalUrl = canonicalPath ? `${siteUrl}${canonicalPath}` : null;
 
 <script>
   import { createClient } from '../lib/supabase'
+
   const _supabase = createClient()
   window.__getAuthToken = async () => {
     const { data: { session } } = await _supabase.auth.getSession()
     return session?.access_token ?? window.__authToken ?? ''
   }
-  document.getElementById('logout-btn')?.addEventListener('click', async () => {
+
+  // Sign-out (shared handler)
+  async function signOut() {
     await _supabase.auth.signOut()
     window.location.href = '/login'
+  }
+  document.getElementById('logout-btn')?.addEventListener('click', signOut)
+  document.getElementById('mobile-logout-btn')?.addEventListener('click', signOut)
+
+  // ── Profile dropdown ──────────────────────────────────
+  const profileBtn  = document.getElementById('profile-btn') as HTMLButtonElement | null
+  const profileDrop = document.getElementById('profile-dropdown')
+  const profileWrap = document.getElementById('profile-menu-wrap')
+
+  function openDrop()  { profileDrop?.classList.add('is-open');    profileBtn?.setAttribute('aria-expanded', 'true'); }
+  function closeDrop() { profileDrop?.classList.remove('is-open'); profileBtn?.setAttribute('aria-expanded', 'false'); }
+
+  if (profileBtn && profileDrop) {
+    profileBtn.addEventListener('click', (e) => {
+      e.stopPropagation()
+      profileDrop.classList.contains('is-open') ? closeDrop() : openDrop()
+    })
+    document.addEventListener('click', (e) => {
+      if (!profileWrap?.contains(e.target as Node)) closeDrop()
+    })
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && profileDrop.classList.contains('is-open')) {
+        closeDrop(); profileBtn.focus()
+      }
+    })
+  }
+
+  // ── Mobile drawer ─────────────────────────────────────
+  const menuBtn    = document.getElementById('mobile-menu-btn') as HTMLButtonElement | null
+  const drawer     = document.getElementById('mobile-drawer')
+  const closeBtn   = document.getElementById('mobile-close-btn')
+
+  function openDrawer() {
+    drawer?.classList.add('is-open')
+    drawer?.setAttribute('aria-hidden', 'false')
+    menuBtn?.classList.add('is-open')
+    menuBtn?.setAttribute('aria-expanded', 'true')
+    document.body.style.overflow = 'hidden'
+    setTimeout(() => closeBtn?.focus(), 50)
+  }
+  function closeDrawer() {
+    menuBtn?.classList.remove('is-open')
+    menuBtn?.setAttribute('aria-expanded', 'false')
+    document.body.style.overflow = ''
+    drawer?.classList.add('is-closing')
+    drawer?.addEventListener('animationend', () => {
+      drawer?.classList.remove('is-open', 'is-closing')
+      drawer?.setAttribute('aria-hidden', 'true')
+    }, { once: true })
+    menuBtn?.focus()
+  }
+
+  menuBtn?.addEventListener('click', openDrawer)
+  closeBtn?.addEventListener('click', closeDrawer)
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && drawer?.classList.contains('is-open')) closeDrawer()
+  })
+
+  // Focus trap
+  drawer?.addEventListener('keydown', (e) => {
+    if (e.key !== 'Tab') return
+    const focusable = Array.from(
+      drawer.querySelectorAll<HTMLElement>('a[href], button:not([disabled])')
+    ).filter(el => el.offsetParent !== null)
+    if (!focusable.length) return
+    const [first, last] = [focusable[0], focusable[focusable.length - 1]]
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
   })
 </script>
