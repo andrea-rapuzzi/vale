@@ -16,7 +16,7 @@ class CookiesUploadRequest(BaseModel):
 
 
 @router.post("/cookies")
-async def upload_cookies(
+def upload_cookies(
     req: CookiesUploadRequest,
     _user: dict = Depends(require_approved_user),
 ):
@@ -50,7 +50,7 @@ async def upload_cookies(
 
 
 @router.get("/cookies")
-async def get_cookies_status(_user: dict = Depends(require_approved_user)):
+def get_cookies_status(_user: dict = Depends(require_approved_user)):
     with get_conn() as conn:
         row = conn.execute(
             "SELECT value, updated_at FROM app_settings WHERE key = 'cookies_content'"
@@ -72,7 +72,7 @@ async def get_cookies_status(_user: dict = Depends(require_approved_user)):
 
 
 @router.delete("/cookies")
-async def delete_cookies(_user: dict = Depends(require_approved_user)):
+def delete_cookies(_user: dict = Depends(require_approved_user)):
     with get_conn() as conn:
         conn.execute("DELETE FROM app_settings WHERE key = 'cookies_content'")
 

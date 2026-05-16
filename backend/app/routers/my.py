@@ -6,7 +6,7 @@ router = APIRouter(prefix="/api/my", tags=["my"])
 
 
 @router.get("/channels")
-async def my_channels(user: dict = Depends(require_approved_user)):
+def my_channels(user: dict = Depends(require_approved_user)):
     """Return channels that belong to the current user."""
     with get_conn() as conn:
         rows = conn.execute(
@@ -38,7 +38,7 @@ async def my_channels(user: dict = Depends(require_approved_user)):
 
 
 @router.get("/searches")
-async def my_searches(user: dict = Depends(require_approved_user)):
+def my_searches(user: dict = Depends(require_approved_user)):
     """Return AI searches made by the current user."""
     with get_conn() as conn:
         rows = conn.execute(

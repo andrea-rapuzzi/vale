@@ -115,9 +115,12 @@ def _get_pool() -> ConnectionPool:
             )
         _pool = ConnectionPool(
             settings.database_url,
-            min_size=1,
-            max_size=10,
-            # prepare_threshold=0 disables auto-prepared statements, required for
+            min_size=2,
+            max_size=20,
+            timeout=5.0,
+            max_idle=300,
+            max_lifetime=1800,
+            # prepare_threshold=None disables auto-prepared statements, required for
             # PgBouncer in transaction mode (Supabase port 6543).
             kwargs={"row_factory": dict_row, "prepare_threshold": None},
             open=True,

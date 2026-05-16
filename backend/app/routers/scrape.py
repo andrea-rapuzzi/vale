@@ -67,7 +67,7 @@ async def scrape_from_url(
 
 
 @router.get("/status/{job_id}", response_model=JobStatusOut)
-async def scrape_status(job_id: str):
+def scrape_status(job_id: str):
     job = get_job(job_id)
     if job is None:
         raise HTTPException(404, "Job not found")

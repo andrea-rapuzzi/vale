@@ -59,7 +59,7 @@ async def health():
 
 
 @app.get("/api/auth/me")
-async def auth_me(user: dict = Depends(require_approved_user)):
+def auth_me(user: dict = Depends(require_approved_user)):
     return {"user_id": user["user_id"], "email": user["email"]}
 
 
