@@ -3,95 +3,141 @@ import Base from '../layouts/Base.astro';
 import { t } from '../lib/i18n';
 
 const lang = Astro.locals.lang ?? 'en';
-const apiBase = import.meta.env.BACKEND_URL ?? 'http://localhost:8000';
-const accessToken = Astro.locals.accessToken ?? '';
-
-let channels: any[] = [];
-let searches: any[] = [];
-let error = '';
-
-if (accessToken) {
-  try {
-    const [chRes, srRes] = await Promise.all([
-      fetch(`${apiBase}/api/my/channels`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        signal: AbortSignal.timeout(5000),
-      }),
-      fetch(`${apiBase}/api/my/searches`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        signal: AbortSignal.timeout(5000),
-      }),
-    ]);
-    if (chRes.ok) channels = (await chRes.json()).channels ?? [];
-    if (srRes.ok) searches = (await srRes.json()).searches ?? [];
-  } catch (e: any) {
-    error = e.message;
-  }
-}
 ---
 <Base title={t(lang, 'myLibrary.title')}>
   <div class="space-y-10">
     <h1 class="text-2xl font-bold text-white">{t(lang, 'myLibrary.title')}</h1>
 
-    {error && <div class="text-red-400 text-sm">{t(lang, 'common.error')}: {error}</div>}
-
     <!-- My Channels -->
     <section class="space-y-4">
       <h2 class="text-lg font-semibold text-white">{t(lang, 'myLibrary.channelsHeading')}</h2>
-      {channels.length === 0 ? (
-        <p class="text-sm text-gray-400">{t(lang, 'myLibrary.noChannels')}</p>
-      ) : (
-        <ul class="space-y-2">
-          {channels.map((c: any) => (
-            <li>
-              <a
-                href={`/channel/${c.id}`}
-                class="flex items-center justify-between px-4 py-3 rounded-lg bg-gray-900 hover:bg-gray-800 transition-colors group"
-              >
-                <span class="text-sm text-gray-200 group-hover:text-white truncate max-w-xs font-medium">
-                  {c.name ?? c.url}
-                </span>
-                <span class="text-xs text-gray-500 ml-4 shrink-0">
-                  <span class={c.scraped_count > 0 ? 'text-green-400' : 'text-gray-500'}>{c.scraped_count}</span>/{c.video_count} scraped
-                  {c.fetched_at && <span class="ml-2">· {c.fetched_at.slice(0,10)}</span>}
-                </span>
-              </a>
-            </li>
-          ))}
-        </ul>
-      )}
+      <div id="channels-skeleton" class="space-y-2">
+        {Array.from({ length: 3 }).map(() => (
+          <div class="h-12 rounded-lg bg-gray-900 animate-pulse" />
+        ))}
+      </div>
+      <ul id="channels-list" class="hidden space-y-2"></ul>
+      <p id="channels-empty" class="hidden text-sm text-gray-400">{t(lang, 'myLibrary.noChannels')}</p>
     </section>
 
     <!-- My Searches -->
     <section class="space-y-4">
       <h2 class="text-lg font-semibold text-white">{t(lang, 'myLibrary.searchesHeading')}</h2>
-      {searches.length === 0 ? (
-        <p class="text-sm text-gray-400">{t(lang, 'myLibrary.noSearches')}</p>
-      ) : (
-        <ul class="space-y-3">
-          {searches.map((s: any) => (
-            <li class="px-4 py-3 rounded-lg bg-gray-900 space-y-1.5">
-              <div class="flex items-start justify-between gap-4">
-                <p class="text-sm text-white font-medium leading-snug">{s.question}</p>
-                <a
-                  href={`/video/${s.video_id}`}
-                  class="shrink-0 text-xs text-indigo-400 hover:text-indigo-300 font-medium"
-                >
-                  {t(lang, 'myLibrary.goToVideo')} →
-                </a>
-              </div>
-              <p class="text-xs text-gray-500">
-                {s.channel_name && <span>{s.channel_name} · </span>}
-                <span class="text-gray-400">{s.video_title}</span>
-                {s.created_at && <span class="ml-2">· {s.created_at.slice(0,10)}</span>}
-              </p>
-              {s.answer && (
-                <p class="text-xs text-gray-300 leading-relaxed line-clamp-2">{s.answer}</p>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
+      <div id="searches-skeleton" class="space-y-2">
+        {Array.from({ length: 3 }).map(() => (
+          <div class="h-20 rounded-lg bg-gray-900 animate-pulse" />
+        ))}
+      </div>
+      <ul id="searches-list" class="hidden space-y-3"></ul>
+      <p id="searches-empty" class="hidden text-sm text-gray-400">{t(lang, 'myLibrary.noSearches')}</p>
     </section>
+
+    <span
+      id="i18n-data"
+      class="hidden"
+      data-go-to-video={t(lang, 'myLibrary.goToVideo')}
+    />
   </div>
 </Base>
+
+<script>
+  const apiBase = (import.meta.env.PUBLIC_BACKEND_URL as string) ?? 'http://localhost:8000';
+
+  function esc(s: unknown): string {
+    return String(s ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function removeSkeleton(id: string) {
+    document.getElementById(id)?.remove();
+  }
+
+  function showEmpty(id: string) {
+    document.getElementById(id)?.classList.remove('hidden');
+  }
+
+  async function loadMyData() {
+    const token: string = (await (window as any).__getAuthToken?.()) ?? (window as any).__authToken ?? '';
+    if (!token) {
+      removeSkeleton('channels-skeleton');
+      removeSkeleton('searches-skeleton');
+      showEmpty('channels-empty');
+      showEmpty('searches-empty');
+      return;
+    }
+
+    const headers = { Authorization: `Bearer ${token}` };
+    const goToVideo = (document.getElementById('i18n-data') as HTMLElement).dataset.goToVideo ?? '';
+
+    const [chResult, srResult] = await Promise.allSettled([
+      fetch(`${apiBase}/api/my/channels`, { headers }),
+      fetch(`${apiBase}/api/my/searches`, { headers }),
+    ]);
+
+    // --- Channels ---
+    removeSkeleton('channels-skeleton');
+    const channelsList = document.getElementById('channels-list');
+
+    if (chResult.status === 'fulfilled' && chResult.value.ok) {
+      const channels: any[] = (await chResult.value.json()).channels ?? [];
+      if (channels.length === 0) {
+        showEmpty('channels-empty');
+      } else if (channelsList) {
+        channelsList.innerHTML = channels
+          .map(
+            c => `
+          <li>
+            <a href="/channel/${c.id}" class="flex items-center justify-between px-4 py-3 rounded-lg bg-gray-900 hover:bg-gray-800 transition-colors group">
+              <span class="text-sm text-gray-200 group-hover:text-white truncate max-w-xs font-medium">${esc(c.name ?? c.url)}</span>
+              <span class="text-xs text-gray-500 ml-4 shrink-0">
+                <span class="${c.scraped_count > 0 ? 'text-green-400' : 'text-gray-500'}">${c.scraped_count}</span>/${c.video_count} scraped
+                ${c.fetched_at ? `<span class="ml-2">· ${String(c.fetched_at).slice(0, 10)}</span>` : ''}
+              </span>
+            </a>
+          </li>`,
+          )
+          .join('');
+        channelsList.classList.remove('hidden');
+      }
+    } else {
+      showEmpty('channels-empty');
+    }
+
+    // --- Searches ---
+    removeSkeleton('searches-skeleton');
+    const searchesList = document.getElementById('searches-list');
+
+    if (srResult.status === 'fulfilled' && srResult.value.ok) {
+      const searches: any[] = (await srResult.value.json()).searches ?? [];
+      if (searches.length === 0) {
+        showEmpty('searches-empty');
+      } else if (searchesList) {
+        searchesList.innerHTML = searches
+          .map(
+            s => `
+          <li class="px-4 py-3 rounded-lg bg-gray-900 space-y-1.5">
+            <div class="flex items-start justify-between gap-4">
+              <p class="text-sm text-white font-medium leading-snug">${esc(s.question)}</p>
+              <a href="/video/${s.video_id}" class="shrink-0 text-xs text-indigo-400 hover:text-indigo-300 font-medium">${esc(goToVideo)} →</a>
+            </div>
+            <p class="text-xs text-gray-500">
+              ${s.channel_name ? `<span>${esc(s.channel_name)} · </span>` : ''}
+              <span class="text-gray-400">${esc(s.video_title)}</span>
+              ${s.created_at ? `<span class="ml-2">· ${String(s.created_at).slice(0, 10)}</span>` : ''}
+            </p>
+            ${s.answer ? `<p class="text-xs text-gray-300 leading-relaxed line-clamp-2">${esc(s.answer)}</p>` : ''}
+          </li>`,
+          )
+          .join('');
+        searchesList.classList.remove('hidden');
+      }
+    } else {
+      showEmpty('searches-empty');
+    }
+  }
+
+  loadMyData();
+</script>

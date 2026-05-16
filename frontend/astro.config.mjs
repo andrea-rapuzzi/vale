@@ -10,5 +10,5 @@ export default defineConfig({
   vite: {
     plugins: [tailwindcss()]
   },
-  adapter: vercel()
+  adapter: vercel({ maxDuration: 30 })
 });
