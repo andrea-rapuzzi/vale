@@ -17,7 +17,7 @@ def _now() -> str:
 
 
 @router.post("")
-async def start_query(
+def start_query(
     req: QueryRequest,
     background_tasks: BackgroundTasks,
     _user: dict = Depends(require_approved_user),
@@ -37,7 +37,7 @@ async def start_query(
 
 
 @router.get("/status/{job_id}", response_model=JobStatusOut)
-async def query_status(job_id: str):
+def query_status(job_id: str):
     job = get_job(job_id)
     if job is None:
         raise HTTPException(404, "Job not found")
@@ -45,7 +45,7 @@ async def query_status(job_id: str):
 
 
 @router.get("/{query_id}/results")
-async def get_results(
+def get_results(
     query_id: int,
     limit: int = 200,
     offset: int = 0,
@@ -101,7 +101,7 @@ async def get_results(
 
 
 @router.get("/{query_id}/report", response_class=PlainTextResponse)
-async def get_report(query_id: int, _user: dict = Depends(require_approved_user)):
+def get_report(query_id: int, _user: dict = Depends(require_approved_user)):
     with get_conn() as conn:
         exists = conn.execute("SELECT id FROM queries WHERE id = %s", (query_id,)).fetchone()
     if exists is None:
@@ -110,7 +110,7 @@ async def get_report(query_id: int, _user: dict = Depends(require_approved_user)
 
 
 @queries_router.get("")
-async def list_queries(limit: int = 20, offset: int = 0):
+def list_queries(limit: int = 20, offset: int = 0):
     with get_conn() as conn:
         rows = conn.execute(
             """

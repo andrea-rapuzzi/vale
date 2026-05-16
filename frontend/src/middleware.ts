@@ -92,18 +92,49 @@ export const onRequest: MiddlewareHandler = async (context, next) => {
     return context.redirect('/login')
   }
 
-  // Check approval status against the backend.
+  // Check approval status against the backend, with a short-lived cookie cache
+  // to avoid hitting the backend on every gated navigation.
   // Default to approved — only an explicit 403 means "not approved yet".
   const backendUrl = import.meta.env.BACKEND_URL ?? 'http://localhost:8000'
+  const APPROVAL_TTL_MS = 10 * 60 * 1000
+  const cookieCache = cookieHeader.match(/(?:^|;\s*)vale-approved=([^;]+)/)?.[1]
   let approved = true
-  try {
-    const res = await fetch(`${backendUrl}/api/auth/me`, {
-      headers: { Authorization: `Bearer ${session.access_token}` },
-      signal: AbortSignal.timeout(3000),
-    })
-    if (res.status === 403) approved = false
-  } catch {
-    // Backend unreachable — let through
+  let cacheHit = false
+  if (cookieCache) {
+    const [cachedUserId, cachedTsStr] = decodeURIComponent(cookieCache).split('.')
+    const cachedTs = Number(cachedTsStr)
+    if (
+      cachedUserId === session.user.id &&
+      Number.isFinite(cachedTs) &&
+      Date.now() - cachedTs < APPROVAL_TTL_MS
+    ) {
+      cacheHit = true
+    }
+  }
+
+  if (!cacheHit) {
+    try {
+      const res = await fetch(`${backendUrl}/api/auth/me`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+        signal: AbortSignal.timeout(3000),
+      })
+      if (res.status === 403) {
+        approved = false
+      } else if (res.ok) {
+        context.cookies.set(
+          'vale-approved',
+          `${session.user.id}.${Date.now()}`,
+          {
+            path: '/',
+            maxAge: APPROVAL_TTL_MS / 1000,
+            httpOnly: true,
+            sameSite: 'lax',
+          },
+        )
+      }
+    } catch {
+      // Backend unreachable — let through
+    }
   }
 
   if (!approved) {

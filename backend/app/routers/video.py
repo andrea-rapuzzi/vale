@@ -14,19 +14,17 @@ def _now() -> str:
 
 
 @videos_router.get("/scraped")
-async def list_scraped_videos(limit: int = 100, offset: int = 0):
+def list_scraped_videos(limit: int = 100, offset: int = 0):
     """List videos that have been scraped, most recent first."""
     with get_conn() as conn:
         rows = conn.execute(
             """
             SELECT v.id, v.youtube_id, v.title, v.duration_sec, v.upload_date,
                    v.scraped_at, v.channel_id, c.name AS channel_name,
-                   COUNT(ch.id) AS chunk_count
+                   (SELECT COUNT(*) FROM chunks ch WHERE ch.video_id = v.id) AS chunk_count
             FROM videos v
             JOIN channels c ON c.id = v.channel_id
-            LEFT JOIN chunks ch ON ch.video_id = v.id
             WHERE v.scraped_at IS NOT NULL
-            GROUP BY v.id, c.name
             ORDER BY v.scraped_at DESC
             LIMIT %s OFFSET %s
             """,
@@ -56,7 +54,7 @@ async def list_scraped_videos(limit: int = 100, offset: int = 0):
 
 
 @router.get("/{video_id}/transcript")
-async def get_transcript(video_id: int):
+def get_transcript(video_id: int):
     with get_conn() as conn:
         video = conn.execute(
             """

@@ -70,7 +70,7 @@ async def fetch_channel(
 
 
 @router.get("/fetch/status/{job_id}", response_model=JobStatusOut)
-async def fetch_status(job_id: str):
+def fetch_status(job_id: str):
     job = get_job(job_id)
     if job is None:
         raise HTTPException(404, "Job not found")
@@ -78,7 +78,7 @@ async def fetch_status(job_id: str):
 
 
 @router.get("/{channel_id}/videos")
-async def list_videos(
+def list_videos(
     channel_id: int,
     limit: int = 50,
     offset: int = 0,
@@ -132,7 +132,7 @@ async def list_videos(
 
 
 @channels_router.get("")
-async def list_channels(limit: int = 20, offset: int = 0):
+def list_channels(limit: int = 20, offset: int = 0):
     """List recently fetched channels with video and scraped counts."""
     with get_conn() as conn:
         rows = conn.execute(
