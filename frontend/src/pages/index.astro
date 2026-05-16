@@ -5,15 +5,7 @@ import VideoForm from '../components/VideoForm.astro';
 import { t } from '../lib/i18n';
 
 const lang = Astro.locals.lang ?? 'en';
-const apiBase = import.meta.env.BACKEND_URL ?? 'http://localhost:8000';
-let recentChannels: any[] = [];
-try {
-  const res = await fetch(`${apiBase}/api/channels?limit=50`, { signal: AbortSignal.timeout(500) });
-  if (res.ok) {
-    const data = await res.json();
-    recentChannels = data.channels ?? [];
-  }
-} catch {}
+const publicApiBase = import.meta.env.PUBLIC_BACKEND_URL ?? import.meta.env.BACKEND_URL ?? 'http://localhost:8000';
 ---
 <Base title="Home" description="Add YouTube channels, scrape transcripts, and run AI-powered semantic searches to find the exact moments that match your intent." canonicalPath="/">
   <div class="max-w-2xl mx-auto space-y-10">
@@ -26,25 +18,54 @@ try {
 
     <VideoForm />
 
-    {recentChannels.length > 0 && (
-      <div>
-        <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">{t(lang, 'home.channelsHeading')}</h2>
-        <ul class="space-y-2">
-          {recentChannels.map((c: any) => (
-            <li>
-              <a
-                href={`/channel/${c.id}`}
-                class="flex items-center justify-between px-4 py-3 rounded-lg bg-gray-900 hover:bg-gray-800 transition-colors group"
-              >
-                <span class="text-sm text-gray-200 group-hover:text-white truncate max-w-xs">{c.name ?? c.url}</span>
-                <span class="text-xs text-gray-500 ml-4 shrink-0">
-                  {c.scraped_count}/{c.video_count} scraped · {c.fetched_at.slice(0,10)}
-                </span>
-              </a>
-            </li>
-          ))}
-        </ul>
-      </div>
-    )}
+    <span id="page-data" class="hidden" data-api-base={publicApiBase} />
+
+    <div id="recent-channels" class="hidden">
+      <h2 class="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">{t(lang, 'home.channelsHeading')}</h2>
+      <ul id="recent-channels-list" class="space-y-2"></ul>
+    </div>
   </div>
 </Base>
+
+<script>
+  const apiBase = (document.getElementById('page-data') as HTMLElement).dataset.apiBase!;
+
+  function esc(s: unknown): string {
+    return String(s ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  async function loadRecentChannels() {
+    try {
+      const res = await fetch(`${apiBase}/api/channels?limit=50`);
+      if (!res.ok) return;
+      const channels: any[] = (await res.json()).channels ?? [];
+      if (channels.length === 0) return;
+
+      const container = document.getElementById('recent-channels');
+      const list = document.getElementById('recent-channels-list');
+      if (!list || !container) return;
+
+      list.innerHTML = channels
+        .map(
+          c => `
+        <li>
+          <a href="/channel/${c.id}" class="flex items-center justify-between px-4 py-3 rounded-lg bg-gray-900 hover:bg-gray-800 transition-colors group">
+            <span class="text-sm text-gray-200 group-hover:text-white truncate max-w-xs">${esc(c.name ?? c.url)}</span>
+            <span class="text-xs text-gray-500 ml-4 shrink-0">
+              ${c.scraped_count}/${c.video_count} scraped · ${c.fetched_at ? String(c.fetched_at).slice(0, 10) : ''}
+            </span>
+          </a>
+        </li>`,
+        )
+        .join('');
+
+      container.classList.remove('hidden');
+    } catch {}
+  }
+
+  loadRecentChannels();
+</script>
