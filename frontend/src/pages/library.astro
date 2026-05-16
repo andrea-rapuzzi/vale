@@ -3,140 +3,175 @@ import Base from '../layouts/Base.astro';
 import { t } from '../lib/i18n';
 
 const lang = Astro.locals.lang ?? 'en';
-const apiBase = import.meta.env.BACKEND_URL ?? 'http://localhost:8000';
-
-let videos: any[] = [];
-let total = 0;
-let error = '';
-
-try {
-  const res = await fetch(`${apiBase}/api/videos/scraped?limit=200`);
-  if (!res.ok) {
-    error = `HTTP ${res.status}`;
-  } else {
-    const data = await res.json();
-    videos = data.videos ?? [];
-    total = data.total ?? videos.length;
-  }
-} catch (e: any) {
-  error = e.message;
-}
-
-function fmtDuration(s: number | null) {
-  if (!s) return '';
-  const m = Math.floor(s / 60);
-  const sec = s % 60;
-  return `${m}m${sec}s`;
-}
+const publicApiBase = import.meta.env.PUBLIC_BACKEND_URL ?? import.meta.env.BACKEND_URL ?? 'http://localhost:8000';
 ---
 <Base title={t(lang, 'library.title')}>
   <div class="space-y-6">
     <div>
       <h1 class="text-2xl font-bold text-white">{t(lang, 'library.title')}</h1>
-      <p class="text-sm text-gray-400 mt-1">
-        {total === 1
-          ? t(lang, 'library.subtitle', { count: total })
-          : t(lang, 'library.subtitle_plural', { count: total })}
-      </p>
+      <p id="library-subtitle" class="text-sm text-gray-400 mt-1">&nbsp;</p>
     </div>
 
-    {error && <div class="text-red-400 text-sm" set:html={t(lang, 'library.error', { msg: error })} />}
+    <div id="error-msg" class="hidden text-red-400 text-sm"></div>
 
-    {!error && videos.length === 0 && (
-      <p class="text-gray-400 text-sm" set:html={t(lang, 'library.empty')} />
-    )}
+    <div id="library-skeleton" class="space-y-2">
+      {Array.from({ length: 8 }).map(() => (
+        <div class="h-14 rounded-lg bg-gray-900 animate-pulse" />
+      ))}
+    </div>
 
-    {videos.length > 0 && (
-      <div class="space-y-2">
-        <input
-          id="filter"
-          type="text"
-          placeholder={t(lang, 'library.filterPlaceholder')}
-          class="w-full px-4 py-2.5 rounded-lg bg-gray-900 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
-        />
+    <div id="library-content" class="hidden space-y-2">
+      <input
+        id="filter"
+        type="text"
+        placeholder={t(lang, 'library.filterPlaceholder')}
+        class="w-full px-4 py-2.5 rounded-lg bg-gray-900 border border-gray-700 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-sm"
+      />
 
-        <!-- Compare action bar (auto-shown when 1+ video selected) -->
-        <div
-          id="compare-bar"
-          class="hidden sticky bottom-4 z-10 flex items-center gap-3 px-5 py-3 rounded-xl bg-gray-800 border border-gray-700 shadow-xl"
-        >
-          <span id="compare-count" class="text-sm text-gray-300 font-medium">0 / 3 {t(lang, 'library.selected', { count: 0 })}</span>
-          <span class="text-gray-600">·</span>
-          <span class="text-xs text-gray-500">{t(lang, 'library.selectHint')}</span>
-          <div class="ml-auto flex gap-2">
-            <button
-              id="compare-clear-btn"
-              class="px-3 py-2 rounded-lg border border-gray-600 text-gray-400 text-sm hover:bg-gray-700 transition-colors"
-            >
-              {t(lang, 'library.clear')}
-            </button>
-            <button
-              id="compare-classic-btn"
-              disabled
-              class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {t(lang, 'library.classicSearch')}
-            </button>
-            <button
-              id="compare-ai-btn"
-              disabled
-              class="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              {t(lang, 'library.aiSearch')}
-            </button>
-          </div>
+      <div
+        id="compare-bar"
+        class="hidden sticky bottom-4 z-10 flex items-center gap-3 px-5 py-3 rounded-xl bg-gray-800 border border-gray-700 shadow-xl"
+      >
+        <span id="compare-count" class="text-sm text-gray-300 font-medium">0 / 3 {t(lang, 'library.selected', { count: 0 })}</span>
+        <span class="text-gray-600">·</span>
+        <span class="text-xs text-gray-500">{t(lang, 'library.selectHint')}</span>
+        <div class="ml-auto flex gap-2">
+          <button
+            id="compare-clear-btn"
+            class="px-3 py-2 rounded-lg border border-gray-600 text-gray-400 text-sm hover:bg-gray-700 transition-colors"
+          >
+            {t(lang, 'library.clear')}
+          </button>
+          <button
+            id="compare-classic-btn"
+            disabled
+            class="px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {t(lang, 'library.classicSearch')}
+          </button>
+          <button
+            id="compare-ai-btn"
+            disabled
+            class="px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {t(lang, 'library.aiSearch')}
+          </button>
         </div>
-
-        <ul id="video-list" class="space-y-2 pt-2">
-          {videos.map((v: any) => (
-            <li
-              class="video-row flex items-center gap-4 px-4 py-3 rounded-lg bg-gray-900 hover:bg-gray-800 transition-colors group"
-              data-search={(v.title + ' ' + (v.channel_name ?? '')).toLowerCase()}
-              data-id={v.id}
-            >
-              <input
-                type="checkbox"
-                class="compare-cb appearance-none w-4 h-4 shrink-0 cursor-pointer rounded border-2 border-gray-500 bg-gray-800 checked:bg-indigo-600 checked:border-indigo-500 transition-colors"
-                data-id={v.id}
-              />
-              <div class="flex-1 min-w-0 space-y-0.5">
-                <a
-                  href={`/video/${v.id}`}
-                  class="block text-sm text-gray-100 group-hover:text-white font-medium truncate"
-                >
-                  {v.title}
-                </a>
-                <p class="text-xs text-gray-500 truncate">
-                  <a href={`/channel/${v.channel_id}`} class="hover:text-indigo-300">
-                    {v.channel_name ?? '—'}
-                  </a>
-                  <span class="mx-1.5">·</span>
-                  {v.chunk_count} chunks
-                  {v.duration_sec && <><span class="mx-1.5">·</span>{fmtDuration(v.duration_sec)}</>}
-                  {v.scraped_at && <><span class="mx-1.5">·</span>scraped {v.scraped_at.slice(0,10)}</>}
-                </p>
-              </div>
-              <a
-                href={`/video/${v.id}`}
-                class="shrink-0 text-xs text-indigo-400 hover:text-indigo-300 font-medium open-link"
-              >
-                {t(lang, 'library.openTranscript')}
-              </a>
-            </li>
-          ))}
-        </ul>
-
-        <p id="empty-filter" class="hidden text-sm text-gray-500 pt-4">{t(lang, 'library.emptyFilter')}</p>
       </div>
-    )}
+
+      <ul id="video-list" class="space-y-2 pt-2"></ul>
+      <p id="empty-filter" class="hidden text-sm text-gray-500 pt-4">{t(lang, 'library.emptyFilter')}</p>
+    </div>
+
+    <p id="empty-msg" class="hidden text-gray-400 text-sm" set:html={t(lang, 'library.empty')} />
+
+    <span
+      id="page-data"
+      class="hidden"
+      data-api-base={publicApiBase}
+      data-subtitle-singular={t(lang, 'library.subtitle')}
+      data-subtitle-plural={t(lang, 'library.subtitle_plural')}
+      data-selected-label={t(lang, 'library.selected', { count: '{{count}}' })}
+      data-open-transcript={t(lang, 'library.openTranscript')}
+    />
   </div>
 </Base>
 
 <script>
-  // ── Filter ──────────────────────────────────────────────────────────────────
-  const input = document.getElementById('filter') as HTMLInputElement | null;
-  const empty = document.getElementById('empty-filter');
-  if (input) {
+  const pageData = (document.getElementById('page-data') as HTMLElement).dataset;
+  const apiBase = pageData.apiBase!;
+
+  function esc(s: unknown): string {
+    return String(s ?? '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function fmtDuration(s: number | null): string {
+    if (!s) return '';
+    const m = Math.floor(s / 60);
+    const sec = s % 60;
+    return `${m}m${sec}s`;
+  }
+
+  const openTranscriptLabel = esc(pageData.openTranscript ?? 'Open');
+
+  async function loadLibrary() {
+    const skeleton = document.getElementById('library-skeleton');
+    const content = document.getElementById('library-content');
+    const emptyMsg = document.getElementById('empty-msg');
+    const errorMsg = document.getElementById('error-msg');
+    const subtitle = document.getElementById('library-subtitle');
+    const list = document.getElementById('video-list');
+
+    try {
+      const res = await fetch(`${apiBase}/api/videos/scraped?limit=200`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const videos: any[] = data.videos ?? [];
+      const total: number = data.total ?? videos.length;
+
+      skeleton?.remove();
+
+      if (videos.length === 0) {
+        emptyMsg?.classList.remove('hidden');
+        return;
+      }
+
+      if (subtitle) {
+        const tpl = total === 1 ? pageData.subtitleSingular! : pageData.subtitlePlural!;
+        subtitle.textContent = tpl.replace('{{count}}', String(total));
+      }
+
+      if (list) {
+        list.innerHTML = videos
+          .map(
+            v => `
+          <li
+            class="video-row flex items-center gap-4 px-4 py-3 rounded-lg bg-gray-900 hover:bg-gray-800 transition-colors group"
+            data-search="${esc((v.title + ' ' + (v.channel_name ?? '')).toLowerCase())}"
+            data-id="${v.id}"
+          >
+            <input
+              type="checkbox"
+              class="compare-cb appearance-none w-4 h-4 shrink-0 cursor-pointer rounded border-2 border-gray-500 bg-gray-800 checked:bg-indigo-600 checked:border-indigo-500 transition-colors"
+              data-id="${v.id}"
+            />
+            <div class="flex-1 min-w-0 space-y-0.5">
+              <a href="/video/${v.id}" class="block text-sm text-gray-100 group-hover:text-white font-medium truncate">${esc(v.title)}</a>
+              <p class="text-xs text-gray-500 truncate">
+                <a href="/channel/${v.channel_id}" class="hover:text-indigo-300">${esc(v.channel_name ?? '—')}</a>
+                <span class="mx-1.5">·</span>${v.chunk_count} chunks
+                ${v.duration_sec ? `<span class="mx-1.5">·</span>${fmtDuration(v.duration_sec)}` : ''}
+                ${v.scraped_at ? `<span class="mx-1.5">·</span>scraped ${String(v.scraped_at).slice(0, 10)}` : ''}
+              </p>
+            </div>
+            <a href="/video/${v.id}" class="shrink-0 text-xs text-indigo-400 hover:text-indigo-300 font-medium open-link">
+              ${openTranscriptLabel}
+            </a>
+          </li>`,
+          )
+          .join('');
+      }
+
+      content?.classList.remove('hidden');
+      initCompare();
+      initFilter();
+    } catch (e: any) {
+      skeleton?.remove();
+      if (errorMsg) {
+        errorMsg.textContent = e.message;
+        errorMsg.classList.remove('hidden');
+      }
+    }
+  }
+
+  function initFilter() {
+    const input = document.getElementById('filter') as HTMLInputElement | null;
+    const emptyFilter = document.getElementById('empty-filter');
+    if (!input) return;
     input.addEventListener('input', () => {
       const q = input.value.trim().toLowerCase();
       const rows = document.querySelectorAll<HTMLElement>('.video-row');
@@ -146,53 +181,49 @@ function fmtDuration(s: number | null) {
         row.style.display = hit ? '' : 'none';
         if (hit) visible++;
       });
-      if (empty) empty.classList.toggle('hidden', visible !== 0);
+      if (emptyFilter) emptyFilter.classList.toggle('hidden', visible !== 0);
     });
   }
 
-  // ── Compare ──────────────────────────────────────────────────────────────────
-  const compareBar = document.getElementById('compare-bar')!;
-  const compareCount = document.getElementById('compare-count')!;
-  const classicBtn = document.getElementById('compare-classic-btn') as HTMLButtonElement;
-  const aiBtn = document.getElementById('compare-ai-btn') as HTMLButtonElement;
-  const clearBtn = document.getElementById('compare-clear-btn') as HTMLButtonElement;
-  const checkboxes = document.querySelectorAll<HTMLInputElement>('.compare-cb');
+  function initCompare() {
+    const compareBar = document.getElementById('compare-bar')!;
+    const compareCount = document.getElementById('compare-count')!;
+    const classicBtn = document.getElementById('compare-classic-btn') as HTMLButtonElement;
+    const aiBtn = document.getElementById('compare-ai-btn') as HTMLButtonElement;
+    const clearBtn = document.getElementById('compare-clear-btn') as HTMLButtonElement;
+    const checkboxes = document.querySelectorAll<HTMLInputElement>('.compare-cb');
 
-  function getSelected(): number[] {
-    return Array.from(checkboxes).filter(cb => cb.checked).map(cb => Number(cb.dataset.id));
-  }
+    function getSelected(): number[] {
+      return Array.from(checkboxes).filter(cb => cb.checked).map(cb => Number(cb.dataset.id));
+    }
 
-  function updateBar() {
-    const sel = getSelected();
-    const count = sel.length;
-    compareCount.textContent = `${count} / 3 selected`;
-    const canCompare = count >= 2;
-    classicBtn.disabled = !canCompare;
-    aiBtn.disabled = !canCompare;
-    checkboxes.forEach(cb => {
-      if (!cb.checked) (cb as HTMLInputElement).disabled = count >= 3;
+    function updateBar() {
+      const sel = getSelected();
+      const count = sel.length;
+      const tpl = pageData.selectedLabel ?? '{{count}} selected';
+      compareCount.textContent = `${count} / 3 ${tpl.replace('{{count}}', String(count))}`;
+      const canCompare = count >= 2;
+      classicBtn.disabled = !canCompare;
+      aiBtn.disabled = !canCompare;
+      checkboxes.forEach(cb => {
+        if (!cb.checked) (cb as HTMLInputElement).disabled = count >= 3;
+      });
+      compareBar.classList.toggle('hidden', count === 0);
+    }
+
+    function buildCompareUrl(mode: string): string {
+      const ids = getSelected();
+      return `/compare?${ids.map(id => `v=${id}`).join('&')}&mode=${mode}`;
+    }
+
+    clearBtn.addEventListener('click', () => {
+      checkboxes.forEach(cb => { cb.checked = false; (cb as HTMLInputElement).disabled = false; });
+      updateBar();
     });
-    compareBar.classList.toggle('hidden', count === 0);
+    checkboxes.forEach(cb => cb.addEventListener('change', updateBar));
+    classicBtn.addEventListener('click', () => { window.location.href = buildCompareUrl('classic'); });
+    aiBtn.addEventListener('click', () => { window.location.href = buildCompareUrl('ai'); });
   }
 
-  function buildCompareUrl(mode: string): string {
-    const ids = getSelected();
-    const params = ids.map(id => `v=${id}`).join('&');
-    return `/compare?${params}&mode=${mode}`;
-  }
-
-  clearBtn.addEventListener('click', () => {
-    checkboxes.forEach(cb => { cb.checked = false; (cb as HTMLInputElement).disabled = false; });
-    updateBar();
-  });
-
-  checkboxes.forEach(cb => cb.addEventListener('change', updateBar));
-
-  classicBtn.addEventListener('click', () => {
-    window.location.href = buildCompareUrl('classic');
-  });
-
-  aiBtn.addEventListener('click', () => {
-    window.location.href = buildCompareUrl('ai');
-  });
+  loadLibrary();
 </script>

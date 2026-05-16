@@ -3,6 +3,7 @@ import Base from '../layouts/Base.astro';
 import { t } from '../lib/i18n';
 
 const lang = Astro.locals.lang ?? 'en';
+const publicApiBase = import.meta.env.PUBLIC_BACKEND_URL ?? import.meta.env.BACKEND_URL ?? 'http://localhost:8000';
 ---
 <Base title={t(lang, 'myLibrary.title')}>
   <div class="space-y-10">
@@ -35,13 +36,15 @@ const lang = Astro.locals.lang ?? 'en';
     <span
       id="i18n-data"
       class="hidden"
+      data-api-base={publicApiBase}
       data-go-to-video={t(lang, 'myLibrary.goToVideo')}
     />
   </div>
 </Base>
 
 <script>
-  const apiBase = (import.meta.env.PUBLIC_BACKEND_URL as string) ?? 'http://localhost:8000';
+  const pageData = (document.getElementById('i18n-data') as HTMLElement).dataset;
+  const apiBase = pageData.apiBase!;
 
   function esc(s: unknown): string {
     return String(s ?? '')
@@ -70,7 +73,7 @@ const lang = Astro.locals.lang ?? 'en';
     }
 
     const headers = { Authorization: `Bearer ${token}` };
-    const goToVideo = (document.getElementById('i18n-data') as HTMLElement).dataset.goToVideo ?? '';
+    const goToVideo = pageData.goToVideo ?? '';
 
     const [chResult, srResult] = await Promise.allSettled([
       fetch(`${apiBase}/api/my/channels`, { headers }),

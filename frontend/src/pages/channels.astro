@@ -3,6 +3,7 @@ import Base from '../layouts/Base.astro';
 import { t } from '../lib/i18n';
 
 const lang = Astro.locals.lang ?? 'en';
+const publicApiBase = import.meta.env.PUBLIC_BACKEND_URL ?? import.meta.env.BACKEND_URL ?? 'http://localhost:8000';
 ---
 <Base title={t(lang, 'channels.title')}>
   <div class="space-y-6">
@@ -35,6 +36,7 @@ const lang = Astro.locals.lang ?? 'en';
     <span
       id="i18n-data"
       class="hidden"
+      data-api-base={publicApiBase}
       data-subtitle-singular={t(lang, 'channels.subtitle')}
       data-subtitle-plural={t(lang, 'channels.subtitle_plural')}
     />
@@ -42,7 +44,8 @@ const lang = Astro.locals.lang ?? 'en';
 </Base>
 
 <script>
-  const apiBase = (import.meta.env.PUBLIC_BACKEND_URL as string) ?? 'http://localhost:8000';
+  const i18n = (document.getElementById('i18n-data') as HTMLElement).dataset;
+  const apiBase = i18n.apiBase!;
 
   function esc(s: unknown): string {
     return String(s ?? '')
@@ -59,7 +62,6 @@ const lang = Astro.locals.lang ?? 'en';
     const errorMsg = document.getElementById('error-msg');
     const subtitle = document.getElementById('channels-subtitle');
     const list = document.getElementById('channel-list');
-    const i18n = (document.getElementById('i18n-data') as HTMLElement).dataset;
 
     try {
       const res = await fetch(`${apiBase}/api/channels?limit=200`);
