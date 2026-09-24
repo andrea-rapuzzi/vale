@@ -1,5 +1,5 @@
-import asyncio
 import json
+import time
 import logging
 from datetime import datetime, timezone
 from ..database import get_conn
@@ -31,7 +31,9 @@ def _human_message(reason: str) -> str:
     return REASON_MESSAGES.get(reason, REASON_MESSAGES["unknown"])
 
 
-async def run_scrape_job(job_id: str, video_ids: list[int]) -> None:
+def run_scrape_job(job_id: str, video_ids: list[int]) -> None:
+    # Sync on purpose: BackgroundTasks runs it in the threadpool, keeping the
+    # blocking DB and YouTube calls off the event loop.
     update_job(job_id, status="running", total=len(video_ids))
     errors = []
     completed = 0
@@ -70,9 +72,9 @@ async def run_scrape_job(job_id: str, video_ids: list[int]) -> None:
                 continue
 
             if _yt_calls > 0:
-                await asyncio.sleep(1.5)
+                time.sleep(1.5)
             _yt_calls += 1
-            cues, reason = await asyncio.to_thread(fetch_transcript, youtube_id)
+            cues, reason = fetch_transcript(youtube_id)
 
             if cues is None:
                 reason = reason or "unknown"

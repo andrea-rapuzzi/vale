@@ -1,4 +1,3 @@
-import asyncio
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from ..models.api import ScrapeRequest, VideoUrlRequest, JobStatusOut
 from ..jobs import create_job, get_job
@@ -11,7 +10,7 @@ router = APIRouter(prefix="/api/scrape", tags=["scrape"])
 
 
 @router.post("")
-async def start_scrape(
+def start_scrape(
     req: ScrapeRequest,
     background_tasks: BackgroundTasks,
     _user: dict | None = Depends(optional_user),
@@ -22,14 +21,14 @@ async def start_scrape(
 
 
 @router.post("/from-url")
-async def scrape_from_url(
+def scrape_from_url(
     req: VideoUrlRequest,
     request: Request,
     background_tasks: BackgroundTasks,
     user: dict | None = Depends(optional_user),
 ):
     try:
-        info = await asyncio.to_thread(fetch_video_info, req.url)
+        info = fetch_video_info(req.url)
     except RuntimeError as e:
         raise HTTPException(400, str(e))
 

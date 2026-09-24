@@ -75,36 +75,38 @@ async def run_query_job(
     try:
         await asyncio.to_thread(update_job, job_id, status="running")
 
-        # Fetch chunks to evaluate (skip already evaluated ones)
-        with get_conn() as conn:
-            if video_ids:
-                rows = conn.execute(
-                    """
-                    SELECT c.id, c.start_sec, c.end_sec, c.text, v.youtube_id, v.title AS video_title
-                    FROM chunks c
-                    JOIN videos v ON v.id = c.video_id
-                    WHERE v.id = ANY(%s)
-                      AND v.scraped_at IS NOT NULL
-                      AND c.id NOT IN (
-                          SELECT chunk_id FROM results WHERE query_id = %s
-                      )
-                    """,
-                    (list(video_ids), query_id),
-                ).fetchall()
-            else:
-                rows = conn.execute(
-                    """
-                    SELECT c.id, c.start_sec, c.end_sec, c.text, v.youtube_id, v.title AS video_title
-                    FROM chunks c
-                    JOIN videos v ON v.id = c.video_id
-                    WHERE v.scraped_at IS NOT NULL
-                      AND c.id NOT IN (
-                          SELECT chunk_id FROM results WHERE query_id = %s
-                      )
-                    """,
-                    (query_id,),
-                ).fetchall()
+        # Fetch chunks to evaluate (skip already evaluated ones), off the event loop
+        def _load_chunks() -> list:
+            with get_conn() as conn:
+                if video_ids:
+                    return conn.execute(
+                        """
+                        SELECT c.id, c.start_sec, c.end_sec, c.text, v.youtube_id, v.title AS video_title
+                        FROM chunks c
+                        JOIN videos v ON v.id = c.video_id
+                        WHERE v.id = ANY(%s)
+                          AND v.scraped_at IS NOT NULL
+                          AND c.id NOT IN (
+                              SELECT chunk_id FROM results WHERE query_id = %s
+                          )
+                        """,
+                        (list(video_ids), query_id),
+                    ).fetchall()
+                else:
+                    return conn.execute(
+                        """
+                        SELECT c.id, c.start_sec, c.end_sec, c.text, v.youtube_id, v.title AS video_title
+                        FROM chunks c
+                        JOIN videos v ON v.id = c.video_id
+                        WHERE v.scraped_at IS NOT NULL
+                          AND c.id NOT IN (
+                              SELECT chunk_id FROM results WHERE query_id = %s
+                          )
+                        """,
+                        (query_id,),
+                    ).fetchall()
 
+        rows = await asyncio.to_thread(_load_chunks)
         chunks = [dict(r) for r in rows]
         await asyncio.to_thread(update_job, job_id, total=len(chunks))
 

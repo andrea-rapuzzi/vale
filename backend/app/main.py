@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,13 +14,22 @@ from .routers.video import videos_router
 from .routers.my import router as my_router
 from .auth import require_approved_user
 
+log = logging.getLogger(__name__)
+
 
 class TimeoutMiddleware(BaseHTTPMiddleware):
+    """Sits inside CORSMiddleware, so the 504/500 it returns still carry CORS
+    headers. Unhandled exceptions otherwise reach Starlette's outermost error
+    handler, whose bare 500 the browser reports as an opaque "Failed to fetch"."""
+
     async def dispatch(self, request: Request, call_next):
         try:
             return await asyncio.wait_for(call_next(request), timeout=120.0)
         except asyncio.TimeoutError:
             return JSONResponse({"error": "Request timed out"}, status_code=504)
+        except Exception:
+            log.exception("Unhandled error on %s %s", request.method, request.url.path)
+            return JSONResponse({"detail": "Internal server error"}, status_code=500)
 
 
 @asynccontextmanager

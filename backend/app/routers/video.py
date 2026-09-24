@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
 from ..database import get_conn
@@ -110,30 +111,35 @@ async def video_ai_search(
     request: Request,
     user: dict | None = Depends(optional_user),
 ):
-    with get_conn() as conn:
-        video = conn.execute(
-            """
-            SELECT v.id, v.youtube_id, v.title, v.scraped_at
-            FROM videos v
-            WHERE v.id = %s
-            """,
-            (video_id,),
-        ).fetchone()
+    # Blocking DB work runs in a thread so this async route never stalls the event loop.
+    def _load() -> tuple:
+        with get_conn() as conn:
+            video = conn.execute(
+                """
+                SELECT v.id, v.youtube_id, v.title, v.scraped_at
+                FROM videos v
+                WHERE v.id = %s
+                """,
+                (video_id,),
+            ).fetchone()
 
-        if video is None:
-            raise HTTPException(404, "Video not found")
-        if video["scraped_at"] is None:
-            raise HTTPException(400, "Video not yet scraped")
+            if video is None:
+                raise HTTPException(404, "Video not found")
+            if video["scraped_at"] is None:
+                raise HTTPException(400, "Video not yet scraped")
 
-        rows = conn.execute(
-            """
-            SELECT chunk_index, start_sec, end_sec, text
-            FROM chunks
-            WHERE video_id = %s
-            ORDER BY chunk_index ASC
-            """,
-            (video_id,),
-        ).fetchall()
+            rows = conn.execute(
+                """
+                SELECT chunk_index, start_sec, end_sec, text
+                FROM chunks
+                WHERE video_id = %s
+                ORDER BY chunk_index ASC
+                """,
+                (video_id,),
+            ).fetchall()
+        return video, rows
+
+    video, rows = await asyncio.to_thread(_load)
 
     chunks = [
         {
@@ -161,13 +167,16 @@ async def video_ai_search(
     # Persist AI search for user history
     session_token = request.headers.get("X-Session-Token") or None
     user_id = user["user_id"] if user else None
-    with get_conn() as conn:
-        conn.execute(
-            """
-            INSERT INTO ai_searches (video_id, question, answer, user_id, session_token, created_at)
-            VALUES (%s, %s, %s, %s, %s, %s)
-            """,
-            (video_id, body.question, result.get("answer"), user_id, session_token, _now()),
-        )
+    def _save() -> None:
+        with get_conn() as conn:
+            conn.execute(
+                """
+                INSERT INTO ai_searches (video_id, question, answer, user_id, session_token, created_at)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                """,
+                (video_id, body.question, result.get("answer"), user_id, session_token, _now()),
+            )
+
+    await asyncio.to_thread(_save)
 
     return result
