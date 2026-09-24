@@ -1,4 +1,3 @@
-import asyncio
 import logging
 from datetime import datetime, timezone
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
@@ -18,10 +17,10 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-async def _fetch_job(job_id: str, url: str, user_id: str | None, session_token: str | None) -> None:
+def _fetch_job(job_id: str, url: str, user_id: str | None, session_token: str | None) -> None:
     update_job(job_id, status="running")
     try:
-        channel_name, videos = await asyncio.to_thread(fetch_channel_videos, url)
+        channel_name, videos = fetch_channel_videos(url)
 
         with get_conn() as conn:
             conn.execute(
@@ -56,7 +55,7 @@ async def _fetch_job(job_id: str, url: str, user_id: str | None, session_token: 
 
 
 @router.post("/fetch")
-async def fetch_channel(
+def fetch_channel(
     req: ChannelFetchRequest,
     request: Request,
     background_tasks: BackgroundTasks,
